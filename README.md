@@ -148,14 +148,12 @@ DocDrop/
 ├── database/
 │   └── init.sql                          # Database schema, indexes, audit logs, and seed data
 ├── docker-compose.yml                    # Starts PostgreSQL and Redis containers
-├── .env.example                          # Root environment template
 ├── .gitignore                            # Standard git ignore rules
 ├── README.md                             # Architecture, system design & setup guide
 │
 ├── backend/                              # Node.js + Express REST API (TypeScript)
 │   ├── package.json
 │   ├── tsconfig.json
-│   ├── .env.example
 │   ├── uploads/                          # Local/Volume physical file storage
 │   └── src/
 │       ├── config/
@@ -186,7 +184,6 @@ DocDrop/
     ├── next.config.js
     ├── tailwind.config.ts
     ├── postcss.config.js
-    ├── .env.example
     └── src/
         ├── app/
         │   ├── globals.css               # Global Tailwind CSS directives
