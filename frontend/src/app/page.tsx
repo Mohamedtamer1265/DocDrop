@@ -29,7 +29,7 @@ export default function DocDropHome() {
 
   // Filters & Controls
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'date' | 'title' | 'size'>('date');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
@@ -46,22 +46,42 @@ export default function DocDropHome() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSelectTag = (tagName: string) => {
-    setSelectedTag(tagName);
-    window.history.pushState({ tag: tagName }, '', `?tag=${encodeURIComponent(tagName)}`);
+  const handleToggleTag = (tagName: string) => {
+    setSelectedTags((prev) => {
+      const next = prev.includes(tagName)
+        ? prev.filter((t) => t !== tagName)
+        : [...prev, tagName];
+      
+      const search = next.length > 0 ? `?tags=${next.map(encodeURIComponent).join(',')}` : window.location.pathname;
+      window.history.pushState({ tags: next }, '', search);
+      return next;
+    });
   };
 
-  const handleClearTag = () => {
-    setSelectedTag(null);
+  const handleRemoveTag = (tagName: string) => {
+    setSelectedTags((prev) => {
+      const next = prev.filter((t) => t !== tagName);
+      const search = next.length > 0 ? `?tags=${next.map(encodeURIComponent).join(',')}` : window.location.pathname;
+      window.history.pushState({ tags: next }, '', search);
+      return next;
+    });
+  };
+
+  const handleClearTags = () => {
+    setSelectedTags([]);
     window.history.pushState({}, '', window.location.pathname);
   };
 
   // Listen to browser Back/Forward navigation buttons
   useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
+    const handlePopState = () => {
       const urlParams = new URLSearchParams(window.location.search);
-      const tagFromUrl = urlParams.get('tag');
-      setSelectedTag(tagFromUrl);
+      const tagsParam = urlParams.get('tags') || urlParams.get('tag');
+      if (tagsParam) {
+        setSelectedTags(tagsParam.split(',').filter(Boolean));
+      } else {
+        setSelectedTags([]);
+      }
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -97,18 +117,18 @@ export default function DocDropHome() {
     loadData();
   }, []);
 
-  // Reload documents when active employee changes (simulates department access control)
+  // Reload documents when active employee or tags change
   useEffect(() => {
     if (activeUser) {
       fetchDocuments({
         department_id: activeUser.department_id || undefined,
         q: searchQuery || undefined,
-        tag: selectedTag || undefined,
+        tags: selectedTags.length > 0 ? selectedTags : undefined,
       })
         .then(setDocuments)
         .catch((err) => console.error('Failed to load user docs:', err));
     }
-  }, [activeUser, selectedTag]);
+  }, [activeUser, selectedTags]);
 
   // Handle live search debounce
   useEffect(() => {
@@ -116,7 +136,7 @@ export default function DocDropHome() {
       fetchDocuments({
         department_id: activeUser?.department_id || undefined,
         q: searchQuery || undefined,
-        tag: selectedTag || undefined,
+        tags: selectedTags.length > 0 ? selectedTags : undefined,
       })
         .then(setDocuments)
         .catch((err) => console.error('Search error:', err));
@@ -207,8 +227,9 @@ export default function DocDropHome() {
       <Navbar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        activeTag={selectedTag}
-        onTagClear={handleClearTag}
+        selectedTags={selectedTags}
+        onRemoveTag={handleRemoveTag}
+        onClearTags={handleClearTags}
         sortBy={sortBy}
         onSortChange={setSortBy}
         viewMode={viewMode}
@@ -221,16 +242,19 @@ export default function DocDropHome() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 space-y-6">
-        {/* Virtual Folders / Tags Section - Always present as category row to prevent layout shifting */}
+        {/* Virtual Folders / Tags Section - Multi-select folders */}
         {tags.length > 0 && (
           <section className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Categories & Virtual Folders
-              </h2>
-              {selectedTag && (
+              <div className="flex items-center gap-2">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Categories & Virtual Folders
+                </h2>
+                <span className="text-[10px] text-slate-400">(Click to select multiple folders)</span>
+              </div>
+              {selectedTags.length > 0 && (
                 <button
-                  onClick={handleClearTag}
+                  onClick={handleClearTags}
                   className="text-xs font-medium text-blue-600 hover:text-blue-800"
                 >
                   View All Files
@@ -244,14 +268,8 @@ export default function DocDropHome() {
                   key={tag.id}
                   tag={tag}
                   count={tagCounts[tag.name] || 0}
-                  isSelected={selectedTag === tag.name}
-                  onClick={() => {
-                    if (selectedTag === tag.name) {
-                      handleClearTag();
-                    } else {
-                      handleSelectTag(tag.name);
-                    }
-                  }}
+                  isSelected={selectedTags.includes(tag.name)}
+                  onClick={() => handleToggleTag(tag.name)}
                 />
               ))}
             </div>
@@ -263,19 +281,21 @@ export default function DocDropHome() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <h2 className="text-sm font-bold text-slate-800">
-                {selectedTag ? `Files in "${selectedTag}"` : 'Files & Documents'}
+                {selectedTags.length > 0
+                  ? `Files matching ${selectedTags.map((t) => `"${t}"`).join(' or ')}`
+                  : 'Files & Documents'}
               </h2>
               <span className="text-xs font-semibold text-slate-400 bg-slate-200/60 px-2 py-0.5 rounded-full">
                 {sortedDocuments.length}
               </span>
             </div>
 
-            {selectedTag && (
+            {selectedTags.length > 0 && (
               <button
-                onClick={handleClearTag}
+                onClick={handleClearTags}
                 className="text-xs font-medium text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 px-2.5 py-1 rounded-lg transition-colors"
               >
-                Clear filter
+                Clear folder filters
               </button>
             )}
           </div>
@@ -311,7 +331,7 @@ export default function DocDropHome() {
               </div>
               <h3 className="font-bold text-slate-800 text-base">No documents found</h3>
               <p className="text-xs text-slate-500 max-w-sm">
-                {searchQuery || selectedTag
+                {searchQuery || selectedTags.length > 0
                   ? 'No documents match your filter criteria or current employee permissions.'
                   : 'Start by uploading your first policy, technical spec, or report.'}
               </p>
@@ -352,6 +372,11 @@ export default function DocDropHome() {
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         onDocumentUpdated={handleDocumentUpdated}
+        onDocumentDeleted={(deletedId) => {
+          setDocuments((prev) => prev.filter((d) => d.id !== deletedId));
+          setIsDetailOpen(false);
+        }}
+        allTags={tags}
       />
     </div>
   );

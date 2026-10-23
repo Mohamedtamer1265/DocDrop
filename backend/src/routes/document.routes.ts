@@ -30,9 +30,24 @@ router.get('/documents/download/:versionId', (req, res, next) =>
   documentController.download(req, res, next)
 );
 
+// Delete specific version (requires EEMW password)
+router.delete('/documents/versions/:versionId', (req, res, next) =>
+  documentController.deleteVersion(req, res, next)
+);
+
 // Fetch document details & its metadata
 router.get('/documents/:id', (req, res, next) =>
   documentController.getById(req, res, next)
+);
+
+// Edit document (title/tags with EEMW password)
+router.put('/documents/:id', (req, res, next) =>
+  documentController.update(req, res, next)
+);
+
+// Delete document (with EEMW password)
+router.delete('/documents/:id', (req, res, next) =>
+  documentController.delete(req, res, next)
 );
 
 // Fetch version history

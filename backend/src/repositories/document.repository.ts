@@ -73,8 +73,16 @@ export class DocumentRepository {
       paramIndex++;
     }
 
-    // Filter by tag
-    if (filters.tag) {
+    // Filter by multiple tags (Multi-Folder Selection)
+    if (filters.tags && Array.isArray(filters.tags) && filters.tags.length > 0) {
+      sql += ` AND d.id IN (
+        SELECT dt_sub.document_id FROM document_tags dt_sub
+        JOIN tags t_sub ON dt_sub.tag_id = t_sub.id
+        WHERE t_sub.name = ANY($${paramIndex}::text[])
+      )`;
+      params.push(filters.tags);
+      paramIndex++;
+    } else if (filters.tag) {
       if (isNaN(Number(filters.tag))) {
         sql += ` AND d.id IN (
           SELECT dt_sub.document_id FROM document_tags dt_sub
@@ -309,6 +317,107 @@ export class DocumentRepository {
       [versionId]
     );
     return res.rows[0] || null;
+  }
+
+  /**
+   * Delete a specific version of a document
+   */
+  async deleteDocumentVersion(versionId: string): Promise<{ filePath: string; documentId: string }> {
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      const verRes = await client.query(
+        `SELECT id, document_id, file_path FROM document_versions WHERE id = $1`,
+        [versionId]
+      );
+      if (verRes.rows.length === 0) {
+        throw new Error('Version not found.');
+      }
+      const { document_id, file_path } = verRes.rows[0];
+
+      // Check if this is the only version
+      const countRes = await client.query(
+        `SELECT COUNT(*) FROM document_versions WHERE document_id = $1`,
+        [document_id]
+      );
+      if (parseInt(countRes.rows[0].count, 10) <= 1) {
+        throw new Error('Cannot delete the only version of a document. Delete the document instead.');
+      }
+
+      await client.query(`DELETE FROM document_versions WHERE id = $1`, [versionId]);
+      await client.query(
+        `UPDATE documents SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        [document_id]
+      );
+
+      await client.query('COMMIT');
+      return { filePath: file_path, documentId: document_id };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Delete a document, its tags, permissions, versions, and return file paths
+   */
+  async deleteDocument(id: string): Promise<string[]> {
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      const filesRes = await client.query(
+        `SELECT file_path FROM document_versions WHERE document_id = $1`,
+        [id]
+      );
+      const filePaths = filesRes.rows.map((r) => r.file_path);
+
+      await client.query(`DELETE FROM documents WHERE id = $1`, [id]);
+      await client.query('COMMIT');
+      return filePaths;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Update document title and its associated tags
+   */
+  async updateDocument(
+    id: string,
+    title: string,
+    tagIds?: number[]
+  ): Promise<Document | null> {
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE documents SET title = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+        [title.trim(), id]
+      );
+
+      if (tagIds !== undefined) {
+        await client.query(`DELETE FROM document_tags WHERE document_id = $1`, [id]);
+        for (const tagId of tagIds) {
+          await client.query(
+            `INSERT INTO document_tags (document_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+            [id, tagId]
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+      return await this.getDocumentById(id);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   /**

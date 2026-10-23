@@ -55,6 +55,7 @@ export interface CreateDocumentDTO {
 export interface SearchDocumentsQuery {
   q?: string;
   tag?: number | string;
-  uploader?: string;
+  tags?: string[];
   department_id?: number | string;
+  uploader?: string;
 }

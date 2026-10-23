@@ -74,16 +74,70 @@ export class DocumentController {
    */
   async search(req: Request, res: Response, next: NextFunction) {
     try {
-      const { q, tag, uploader, department_id } = req.query;
+      const { q, tag, tags, uploader, department_id } = req.query;
+
+      let tagList: string[] | undefined;
+      if (tags) {
+        tagList = Array.isArray(tags) ? (tags as string[]) : [tags as string];
+      }
 
       const documents = await documentService.searchDocuments({
         q: q ? String(q) : undefined,
         tag: tag ? String(tag) : undefined,
+        tags: tagList,
         uploader: uploader ? String(uploader) : undefined,
         department_id: department_id ? String(department_id) : undefined,
       });
 
       return sendSuccess(res, documents, 'Documents fetched successfully.');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Edit document title and tags (requires EEMW password)
+   * PUT /api/documents/:id
+   */
+  async update(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const { title, tags, password } = req.body;
+
+      const updated = await documentService.updateDocument(id, title, tags, password);
+      return sendSuccess(res, updated, 'Document updated successfully.');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Delete document (requires EEMW password)
+   * DELETE /api/documents/:id
+   */
+  async delete(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const { password } = req.body;
+
+      await documentService.deleteDocument(id, password);
+      return sendSuccess(res, null, 'Document deleted successfully.');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Delete specific version (requires EEMW password)
+   * DELETE /api/documents/versions/:versionId
+   */
+  async deleteVersion(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { versionId } = req.params;
+      const { password } = req.body;
+
+      const updated = await documentService.deleteVersion(versionId, password);
+      return sendSuccess(res, updated, 'Document version deleted successfully.');
     } catch (err) {
       next(err);
     }

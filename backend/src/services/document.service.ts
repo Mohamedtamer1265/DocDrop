@@ -154,6 +154,111 @@ export class DocumentService {
   }
 
   /**
+   * Delete a specific version (requires company password EEMW)
+   */
+  async deleteVersion(versionId: string, password?: string): Promise<Document> {
+    if (password !== 'EEMW') {
+      throw new Error('Unauthorized: Incorrect password. Action requires company authorization.');
+    }
+
+    const { filePath, documentId } = await this.repo.deleteDocumentVersion(versionId);
+    const fs = await import('fs');
+    const path = await import('path');
+
+    try {
+      let resolved = filePath;
+      if (!path.isAbsolute(resolved)) {
+        resolved = path.resolve(__dirname, '../../', resolved);
+      }
+      if (fs.existsSync(resolved)) {
+        fs.unlinkSync(resolved);
+      }
+    } catch {
+      // Silently skip if file not present
+    }
+
+    await invalidateCachePattern(`doc:${documentId}`);
+    await invalidateCachePattern('search:*');
+
+    const updated = await this.repo.getDocumentById(documentId);
+    return updated!;
+  }
+
+  /**
+   * Delete a document and its stored files (requires company password EEMW)
+   */
+  async deleteDocument(id: string, password?: string): Promise<void> {
+    if (password !== 'EEMW') {
+      throw new Error('Unauthorized: Incorrect password. Action requires company authorization.');
+    }
+
+    const filePaths = await this.repo.deleteDocument(id);
+    const fs = await import('fs');
+    const path = await import('path');
+
+    for (const fp of filePaths) {
+      try {
+        let resolved = fp;
+        if (!path.isAbsolute(resolved)) {
+          resolved = path.resolve(__dirname, '../../', resolved);
+        }
+        if (fs.existsSync(resolved)) {
+          fs.unlinkSync(resolved);
+        }
+      } catch {
+        // Silently skip if file already unlinked
+      }
+    }
+
+    await invalidateCachePattern(`doc:${id}`);
+    await invalidateCachePattern('search:*');
+  }
+
+  /**
+   * Update document details (requires company password EEMW)
+   */
+  async updateDocument(
+    id: string,
+    title: string,
+    tags?: (number | string)[],
+    password?: string
+  ): Promise<Document> {
+    if (password !== 'EEMW') {
+      throw new Error('Unauthorized: Incorrect password. Action requires company authorization.');
+    }
+    if (!title || !title.trim()) {
+      throw new Error('Title cannot be empty.');
+    }
+
+    let resolvedTagIds: number[] | undefined;
+    if (tags !== undefined) {
+      resolvedTagIds = [];
+      for (const t of tags) {
+        if (typeof t === 'number') {
+          resolvedTagIds.push(t);
+        } else if (typeof t === 'string' && t.trim()) {
+          const num = Number(t);
+          if (!isNaN(num)) {
+            resolvedTagIds.push(num);
+          } else {
+            const created = await this.repo.findOrCreateTag(t);
+            resolvedTagIds.push(created.id);
+          }
+        }
+      }
+    }
+
+    const updated = await this.repo.updateDocument(id, title, resolvedTagIds);
+    if (!updated) {
+      throw new Error('Document not found.');
+    }
+
+    await invalidateCachePattern(`doc:${id}`);
+    await invalidateCachePattern('search:*');
+    return updated;
+  }
+
+  /**
    * Clear all documents and versions, and flush search cache
    */
   async clearAllDocuments(): Promise<void> {

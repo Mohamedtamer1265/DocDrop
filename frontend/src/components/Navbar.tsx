@@ -17,8 +17,9 @@ import { User } from '../types';
 interface NavbarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
-  activeTag: string | null;
-  onTagClear: () => void;
+  selectedTags: string[];
+  onRemoveTag: (tag: string) => void;
+  onClearTags: () => void;
   sortBy: 'date' | 'title' | 'size';
   onSortChange: (sort: 'date' | 'title' | 'size') => void;
   viewMode: 'grid' | 'list';
@@ -32,8 +33,9 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   searchQuery,
   onSearchChange,
-  activeTag,
-  onTagClear,
+  selectedTags,
+  onRemoveTag,
+  onClearTags,
   sortBy,
   onSortChange,
   viewMode,
@@ -61,7 +63,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* Left: Brand & Breadcrumbs */}
         <div className="flex items-center space-x-3">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={onTagClear}>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={onClearTags}>
             <div className="h-9 w-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm shadow-blue-300">
               <Cloud className="h-5 w-5 fill-white" />
             </div>
@@ -73,20 +75,36 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Breadcrumbs */}
           <nav className="flex items-center space-x-1 text-sm font-medium">
             <button
-              onClick={onTagClear}
+              onClick={onClearTags}
               className={`hover:text-blue-600 transition-colors ${
-                !activeTag ? 'text-slate-900 font-semibold' : 'text-slate-500'
+                selectedTags.length === 0 ? 'text-slate-900 font-semibold' : 'text-slate-500'
               }`}
             >
               All Documents
             </button>
-            {activeTag && (
+            {selectedTags.length > 0 && (
               <>
                 <span className="text-slate-400">›</span>
-                <span className="text-blue-600 font-semibold flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded-md">
-                  <Folder className="w-3.5 h-3.5 fill-blue-600 text-blue-600" />
-                  {activeTag}
-                </span>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {selectedTags.map((t) => (
+                    <span
+                      key={t}
+                      className="text-blue-600 font-semibold flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded-md text-xs"
+                    >
+                      <Folder className="w-3 h-3 fill-blue-600 text-blue-600" />
+                      {t}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveTag(t);
+                        }}
+                        className="hover:text-red-500 ml-0.5"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
               </>
             )}
           </nav>

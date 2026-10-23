@@ -52,28 +52,11 @@ flowchart TD
 
 ### 2. Design Choices & Rationale
 
-1. **Separation of Concerns (Layered Architecture):**
-   - **Routes**: Expose endpoints following REST principles and wire up validation / upload middlewares.
-   - **Controllers**: Handle HTTP-specific input/output (status codes, headers, response formatting) without leaking business rules.
-   - **Services**: Encapsulate core business logic (e.g., calculating next version number, applying department access rules, orchestrating database transactions with file writes).
-   - **Repositories**: Direct data access to PostgreSQL using parameterized queries for SQL injection safety and maintainability.
-
-2. **Immutable Versioning Strategy:**
-   - Documents are separated into two concepts: the logical `Document` identity and its immutable `DocumentVersion` entries.
-   - When a new version is uploaded, a new record is added with an incremented `version_number` and points to its specific physical file path on the volume.
-   - History is never overwritten, guaranteeing full auditability and the ability to download any prior revision.
-
-3. **Storage & Decoupled File Handling:**
-   - Raw files are stored on a persistent volume mount (`backend/uploads`) or object storage rather than database BLOBs.
-   - The database stores only the sanitized metadata, size, MIME type, and reference path. This keeps the database lean, fast, and backup-friendly.
-
-4. **Multi-Tagging & Department-Level Access Control:**
-   - Many-to-many relationship for tags allows flexible categorization (e.g., `Finance`, `Legal`, `Policy`).
-   - Many-to-many permissions mapping (`document_department_permissions`) allows documents to be shared strictly across designated departments, enabling fine-grained filtering directly at query time.
-
-5. **Search Performance & Redis Caching:**
-   - Indexed database fields (`documents.title`, `documents.uploader_id`, `tags.id`) provide fast relational filtering.
-   - Redis sits in front of read-heavy search queries and hot document metadata to reduce database round-trips. Cache keys are invalidated whenever a new document or version is uploaded.
+* **Layered Architecture:** Clear division between HTTP routes, controllers, business services, and database repositories prevents coupling and keeps code testable.
+* **Immutable Document Versions:** Logical documents and physical file versions are separated (`documents` vs `document_versions`). New revisions increment version numbers without overwriting past files, preserving full audit history.
+* **Decoupled File Storage:** Files are stored on a persistent volume mount while PostgreSQL only stores paths, sizes, and MIME types, keeping database backups lean and fast.
+* **Fine-Grained Access Control:** Many-to-many department permissions restrict confidential files directly at SQL query time, while allowing public files for all employees.
+* **Smart Caching:** Redis caches search queries and hot documents using non-blocking `SCAN` iteration, instantly invalidated upon new uploads or revisions.
 
 ---
 
@@ -141,44 +124,43 @@ erDiagram
 ## Project Structure
 
 ```text
-assessment/
+DocDrop/
 ├── database/
 │   └── init.sql                          # Database schema, indexes, and seed data
-├── docker-compose.yml                    # Starts PostgreSQL and Redis
-├── .env.example                          # Root environment variable template
+├── docker-compose.yml                    # Starts PostgreSQL and Redis containers
+├── .env.example                          # Root environment template
 ├── .gitignore                            # Standard git ignore rules
 ├── README.md                             # Architecture, system design & setup guide
 │
-├── backend/                              # Node.js + TypeScript REST API
+├── backend/                              # Node.js + Express REST API (TypeScript)
 │   ├── package.json
 │   ├── tsconfig.json
 │   ├── .env.example
-│   ├── uploads/                          # Local/Volume file storage
+│   ├── uploads/                          # Local/Volume physical file storage
 │   └── src/
 │       ├── config/
-│       │   ├── db.ts                     # PostgreSQL connection pool
-│       │   └── redis.ts                  # Redis client
+│       │   ├── db.ts                     # PostgreSQL connection pool & schema migration
+│       │   └── redis.ts                  # Redis client with non-blocking SCAN caching
 │       ├── controllers/
-│       │   └── document.controller.ts    # Document request handlers
+│       │   └── document.controller.ts    # Request handlers (upload, view, download, search)
 │       ├── services/
-│       │   └── document.service.ts       # Business & versioning logic
+│       │   └── document.service.ts       # Business rules, versioning, tag management & cache
 │       ├── repositories/
-│       │   └── document.repository.ts    # SQL queries & transactions
+│       │   └── document.repository.ts    # SQL queries, transactions & RBAC filters
 │       ├── routes/
-│       │   ├── index.ts                  # API router root
-│       │   └── document.routes.ts        # REST endpoints
+│       │   ├── index.ts                  # API router aggregation
+│       │   └── document.routes.ts        # REST endpoints definition
 │       ├── middlewares/
-│       │   ├── upload.middleware.ts      # Multer file upload setup
-│       │   ├── validate.middleware.ts    # Request payload validation
-│       │   └── error.middleware.ts       # Global error handler
+│       │   ├── upload.middleware.ts      # Multer file storage & mime configuration
+│       │   └── error.middleware.ts       # Central error handler (Postgres & Multer codes)
 │       ├── types/
 │       │   └── document.types.ts         # TypeScript interfaces & DTOs
 │       ├── utils/
-│       │   └── response.util.ts          # Standard JSON response helpers
-│       ├── app.ts                        # Express application configuration
-│       └── server.ts                     # Server listener bootstrap
+│       │   └── response.util.ts          # Standard JSON API response formatters
+│       ├── app.ts                        # Express app setup & middleware pipeline
+│       └── server.ts                     # HTTP listener bootstrap
 │
-└── frontend/                             # Next.js (App Router) + Tailwind CSS
+└── frontend/                             # Next.js (App Router) + Tailwind CSS UI
     ├── package.json
     ├── tsconfig.json
     ├── next.config.js
@@ -187,24 +169,22 @@ assessment/
     ├── .env.example
     └── src/
         ├── app/
-        │   ├── layout.tsx                # App root layout
-        │   ├── page.tsx                  # Home landing
-        │   └── documents/
-        │       ├── page.tsx              # Search & document listing page
-        │       ├── upload/
-        │       │   └── page.tsx          # Upload document page
-        │       └── [id]/
-        │           └── page.tsx          # Document detail & versions page
+        │   ├── globals.css               # Global Tailwind CSS directives
+        │   ├── layout.tsx                # Root layout & page metadata
+        │   └── page.tsx                  # Main DocDrop dashboard (filters, folders, grid/list)
         ├── components/
-        │   ├── Navbar.tsx                # Navigation header
-        │   ├── DocumentSearch.tsx        # Search bar and filter controls
-        │   ├── DocumentUploadForm.tsx    # Upload form with tag selection
-        │   ├── DocumentDetail.tsx        # Document metadata & actions
-        │   └── VersionHistoryTable.tsx   # Table of historical versions
+        │   ├── Navbar.tsx                # Brand, search bar, sort & employee switcher
+        │   ├── FolderCard.tsx            # Virtual folder cards for category tags
+        │   ├── DocumentCard.tsx          # File card with type badge, quick view & download
+        │   ├── DocumentListView.tsx      # Table alternative for file listing
+        │   ├── DocumentUploadModal.tsx   # Upload modal with custom tag creation & access control
+        │   ├── DocumentDetailModal.tsx   # Metadata inspector, view/download & new revision upload
+        │   ├── VersionHistoryTable.tsx   # Detailed revision history table with download links
+        │   └── UploadQueue.tsx           # Floating bottom-right upload progress widget
         ├── lib/
-        │   └── api.ts                    # Backend API fetcher client
+        │   └── api.ts                    # REST client & fetcher helpers
         └── types/
-            └── index.ts                  # Shared UI types & interfaces
+            └── index.ts                  # Shared frontend UI types
 ```
 
 ---
@@ -212,28 +192,27 @@ assessment/
 ## Setup & Running the Infrastructure
 
 ### 1. Start Database & Redis
-From the project root:
+Ensure Docker Desktop is running, then from the project root:
 ```bash
-docker compose up -d
+docker-compose up -d
 ```
 This automatically boots:
-- PostgreSQL on port `5432` and applies `database/init.sql`.
+- PostgreSQL on port `5433` and applies `database/init.sql`.
 - Redis on port `6379`.
 
 ### 2. Backend Setup
 ```bash
 cd backend
 npm install
-cp .env.example .env
 npm run dev
 ```
+API runs on `http://localhost:5000` (Health check: `http://localhost:5000/api/health`).
 
 ### 3. Frontend Setup
 ```bash
 cd frontend
 npm install
-cp .env.example .env.local
 npm run dev
 ```
-Access the application at `http://localhost:3000`.
+Open **`http://localhost:3000`** in your browser.
 

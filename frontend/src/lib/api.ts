@@ -3,17 +3,22 @@ import { Document, DocumentVersion, MetadataResponse, ApiResponse } from '../typ
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 /**
- * Fetch all documents with optional filters (search query, tag, uploader, department permissions)
+ * Fetch all documents with optional filters (search query, tag or multiple tags, uploader, department permissions)
  */
 export async function fetchDocuments(params?: {
   q?: string;
   tag?: string | number;
+  tags?: string[];
   uploader?: string;
   department_id?: string | number;
 }): Promise<Document[]> {
   const searchParams = new URLSearchParams();
   if (params?.q) searchParams.set('q', params.q);
-  if (params?.tag) searchParams.set('tag', String(params.tag));
+  if (params?.tags && params.tags.length > 0) {
+    params.tags.forEach((t) => searchParams.append('tags', t));
+  } else if (params?.tag) {
+    searchParams.set('tag', String(params.tag));
+  }
   if (params?.uploader) searchParams.set('uploader', params.uploader);
   if (params?.department_id) searchParams.set('department_id', String(params.department_id));
 
@@ -24,6 +29,59 @@ export async function fetchDocuments(params?: {
   }
   const json: ApiResponse<Document[]> = await res.json();
   return json.data || [];
+}
+
+/**
+ * Edit document title & tags with EEMW password
+ */
+export async function updateDocument(
+  id: string,
+  data: { title: string; tags?: (number | string)[]; password: string }
+): Promise<Document> {
+  const res = await fetch(`${API_BASE_URL}/documents/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const json: ApiResponse<Document> = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.message || 'Failed to update document.');
+  }
+  return json.data;
+}
+
+/**
+ * Delete document with EEMW password
+ */
+export async function deleteDocument(id: string, password: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/documents/${id}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  const json: ApiResponse<null> = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.message || 'Failed to delete document.');
+  }
+}
+
+/**
+ * Delete a specific document version with EEMW password
+ */
+export async function deleteDocumentVersion(
+  versionId: string,
+  password: string
+): Promise<Document> {
+  const res = await fetch(`${API_BASE_URL}/documents/versions/${versionId}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  const json: ApiResponse<Document> = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.message || 'Failed to delete version.');
+  }
+  return json.data;
 }
 
 /**
