@@ -27,6 +27,24 @@ export interface DocumentVersion {
   created_at: string;
 }
 
+export interface ActivityLog {
+  id: string;
+  document_id: string;
+  action: string;
+  actor_name: string;
+  details: string;
+  created_at: string;
+}
+
+export interface StorageAnalytics {
+  total_documents: number;
+  total_versions: number;
+  total_bytes: number;
+  quota_bytes: number;
+  by_department: { department: string; bytes: number; count: number }[];
+  by_type: { category: string; bytes: number; count: number }[];
+}
+
 export interface Document {
   id: string;
   title: string;
@@ -43,6 +61,7 @@ export interface Document {
   tags: Tag[];
   department_permissions: Department[];
   versions?: DocumentVersion[];
+  activity_logs?: ActivityLog[];
 }
 
 export interface CreateDocumentDTO {

@@ -54,11 +54,22 @@ CREATE TABLE IF NOT EXISTS document_department_permissions (
     PRIMARY KEY (document_id, department_id)
 );
 
--- 6. Search Optimization & Indexes
+-- 6. Activity & Audit Logs
+CREATE TABLE IF NOT EXISTS document_activity_logs (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+    action VARCHAR(100) NOT NULL,
+    actor_name VARCHAR(255) NOT NULL DEFAULT 'System',
+    details TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 7. Search Optimization & Indexes
 CREATE INDEX IF NOT EXISTS idx_documents_title ON documents(title);
 CREATE INDEX IF NOT EXISTS idx_documents_uploader ON documents(uploader_id);
 CREATE INDEX IF NOT EXISTS idx_doc_versions_doc_id ON document_versions(document_id);
 CREATE INDEX IF NOT EXISTS idx_document_tags_tag ON document_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_doc_id ON document_activity_logs(document_id);
 
 -- 7. Initial Seed Data (Departments & Sample Users for Testing)
 INSERT INTO departments (name) VALUES 

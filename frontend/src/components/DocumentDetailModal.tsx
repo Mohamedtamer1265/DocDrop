@@ -18,8 +18,11 @@ import {
   Pencil,
   Trash2,
   KeyRound,
+  ShieldCheck,
+  Activity,
+  History,
 } from 'lucide-react';
-import { Document, DocumentVersion, Tag } from '../types';
+import { Document, DocumentVersion, Tag, ActivityLog } from '../types';
 import { VersionHistoryTable } from './VersionHistoryTable';
 import { getDownloadUrl, getViewUrl, uploadNewVersion, fetchDocumentById, updateDocument, deleteDocument } from '../lib/api';
 
@@ -29,6 +32,7 @@ interface DocumentDetailModalProps {
   onClose: () => void;
   onDocumentUpdated: (updatedDoc: Document) => void;
   onDocumentDeleted: (deletedId: string) => void;
+  onPreviewDocument?: (doc: Document, versionId?: string) => void;
   allTags?: Tag[];
 }
 
@@ -38,10 +42,12 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
   onClose,
   onDocumentUpdated,
   onDocumentDeleted,
+  onPreviewDocument,
   allTags = [],
 }) => {
   const [isUploadingVersion, setIsUploadingVersion] = useState(false);
   const [versionSuccess, setVersionSuccess] = useState<string | null>(null);
+  const [activeBottomTab, setActiveBottomTab] = useState<'versions' | 'activity'>('versions');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Edit State
@@ -69,9 +75,22 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
       setEditError(null);
       setDeleteError(null);
     }
-  }, [document]);
+  }, [document?.id]);
 
   if (!isOpen || !document) return null;
+
+  // Automatically re-fetch document from backend so Activity Log updates live without page refresh
+  const scheduleActivityRefresh = () => {
+    const docId = document.id;
+    setTimeout(async () => {
+      try {
+        const fresh = await fetchDocumentById(docId);
+        onDocumentUpdated(fresh);
+      } catch {
+        // Ignore transient network errors
+      }
+    }, 500);
+  };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,18 +229,34 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
           <div className="flex flex-wrap items-center gap-3">
             {document.latest_version_id && (
               <>
-                <a
-                  href={getViewUrl(document.latest_version_id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-all"
-                >
-                  <Eye className="w-4 h-4" />
-                  View in Browser
-                </a>
+                {onPreviewDocument ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onPreviewDocument(document, document.latest_version_id);
+                      scheduleActivityRefresh();
+                    }}
+                    className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-all"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Preview Document
+                  </button>
+                ) : (
+                  <a
+                    href={getViewUrl(document.latest_version_id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={scheduleActivityRefresh}
+                    className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-all"
+                  >
+                    <Eye className="w-4 h-4" />
+                    View in Browser
+                  </a>
+                )}
                 <a
                   href={getDownloadUrl(document.latest_version_id)}
                   download
+                  onClick={scheduleActivityRefresh}
                   className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 px-4 rounded-xl shadow-sm shadow-blue-500/20 transition-all"
                 >
                   <Download className="w-4 h-4" />
@@ -501,18 +536,128 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
             </div>
           )}
 
-          {/* Version History Table */}
-          {document.versions && document.versions.length > 0 && (
-            <VersionHistoryTable
-              versions={document.versions}
-              currentVersion={document.current_version}
-              onVersionDeleted={(updatedDoc) => {
-                onDocumentUpdated(updatedDoc);
-                setVersionSuccess('Document version removed successfully.');
-                setTimeout(() => setVersionSuccess(null), 3000);
-              }}
-            />
-          )}
+          {/* Tabs for Version History vs. Activity & Audit Log */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+              <button
+                type="button"
+                onClick={() => setActiveBottomTab('versions')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                  activeBottomTab === 'versions'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>Version History ({document.versions?.length || 1})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveBottomTab('activity')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                  activeBottomTab === 'activity'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span>Activity & Audit Log ({document.activity_logs?.length || 0})</span>
+              </button>
+            </div>
+
+            {activeBottomTab === 'versions' ? (
+              document.versions &&
+              document.versions.length > 0 && (
+                <VersionHistoryTable
+                  versions={document.versions}
+                  currentVersion={document.current_version}
+                  onPreviewVersion={
+                    onPreviewDocument
+                      ? (verId) => {
+                          onPreviewDocument(document, verId);
+                          scheduleActivityRefresh();
+                        }
+                      : undefined
+                  }
+                  onVersionDownloaded={scheduleActivityRefresh}
+                  onVersionDeleted={(updatedDoc) => {
+                    onDocumentUpdated(updatedDoc);
+                    setVersionSuccess('Document version removed successfully.');
+                    setTimeout(() => setVersionSuccess(null), 3000);
+                  }}
+                />
+              )
+            ) : (
+              /* Audit Trail Timeline */
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    Compliance & Audit Trail
+                  </h4>
+                  <span className="text-[11px] text-slate-400">Chronological security log</span>
+                </div>
+
+                {document.activity_logs && document.activity_logs.length > 0 ? (
+                  <div className="border border-slate-200 rounded-xl bg-white divide-y divide-slate-100 max-h-60 overflow-y-auto">
+                    {document.activity_logs.map((log: ActivityLog) => {
+                      const getBadgeStyle = (act: string) => {
+                        switch (act) {
+                          case 'UPLOAD_INITIAL':
+                            return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                          case 'UPLOAD_VERSION':
+                            return 'bg-blue-50 text-blue-700 border-blue-200';
+                          case 'EDIT_METADATA':
+                            return 'bg-amber-50 text-amber-700 border-amber-200';
+                          case 'DELETE_VERSION':
+                            return 'bg-red-50 text-red-700 border-red-200';
+                          case 'DOWNLOAD':
+                            return 'bg-purple-50 text-purple-700 border-purple-200';
+                          default:
+                            return 'bg-slate-100 text-slate-700 border-slate-200';
+                        }
+                      };
+
+                      return (
+                        <div
+                          key={log.id}
+                          className="p-3 flex items-start justify-between gap-3 text-xs hover:bg-slate-50/70 transition-colors"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${getBadgeStyle(
+                                  log.action
+                                )}`}
+                              >
+                                {log.action.replace('_', ' ')}
+                              </span>
+                              <span className="font-semibold text-slate-800">
+                                {log.actor_name}
+                              </span>
+                            </div>
+                            <p className="text-slate-600">{log.details}</p>
+                          </div>
+                          <span className="text-[11px] text-slate-400 whitespace-nowrap">
+                            {formatDate(log.created_at)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-6 text-center bg-slate-50 rounded-xl border border-slate-200/80 text-xs text-slate-500">
+                    Initial creation recorded on {formatDate(document.created_at)} by{' '}
+                    <span className="font-semibold text-slate-700">
+                      {document.uploader_name || 'System'}
+                    </span>
+                    . New edits, downloads, and version uploads will appear here.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

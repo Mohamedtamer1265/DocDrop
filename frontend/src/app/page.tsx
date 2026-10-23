@@ -15,9 +15,11 @@ import { DocumentCard } from '../components/DocumentCard';
 import { DocumentListView } from '../components/DocumentListView';
 import { DocumentUploadModal } from '../components/DocumentUploadModal';
 import { DocumentDetailModal } from '../components/DocumentDetailModal';
+import { DocumentPreviewModal } from '../components/DocumentPreviewModal';
+import { StorageAnalyticsWidget } from '../components/StorageAnalyticsWidget';
 import { UploadQueue } from '../components/UploadQueue';
-import { Document, Tag, Department, User, UploadQueueItem } from '../types';
-import { fetchDocuments, fetchMetadata, fetchDocumentById } from '../lib/api';
+import { Document, Tag, Department, User, UploadQueueItem, StorageAnalytics } from '../types';
+import { fetchDocuments, fetchMetadata, fetchDocumentById, fetchStorageAnalytics } from '../lib/api';
 
 export default function DocDropHome() {
   // State
@@ -26,6 +28,7 @@ export default function DocDropHome() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [activeUser, setActiveUser] = useState<User | null>(null);
+  const [analytics, setAnalytics] = useState<StorageAnalytics | null>(null);
 
   // Filters & Controls
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,6 +40,9 @@ export default function DocDropHome() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [previewVersionId, setPreviewVersionId] = useState<string | undefined>(undefined);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // Upload Queue
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
@@ -87,15 +93,22 @@ export default function DocDropHome() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+  const refreshAnalytics = () => {
+    fetchStorageAnalytics()
+      .then(setAnalytics)
+      .catch(() => {});
+  };
+
   const loadData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [meta, docs] = await Promise.all([
+      const [meta, docs, stats] = await Promise.all([
         fetchMetadata().catch(() => ({ departments: [], tags: [], users: [] })),
         fetchDocuments({
           department_id: activeUser?.department_id || undefined,
         }).catch(() => []),
+        fetchStorageAnalytics().catch(() => null),
       ]);
 
       setDepartments(meta.departments);
@@ -106,6 +119,7 @@ export default function DocDropHome() {
         setActiveUser(meta.users[0]);
       }
       setDocuments(docs);
+      if (stats) setAnalytics(stats);
     } catch (err: any) {
       setError(err.message || 'Failed to connect to backend repository.');
     } finally {
@@ -185,6 +199,18 @@ export default function DocDropHome() {
     setIsDetailOpen(true);
   };
 
+  // Open In-App Document Preview Modal
+  const handleOpenPreview = async (doc: Document, versionId?: string) => {
+    try {
+      const fullDoc = await fetchDocumentById(doc.id);
+      setPreviewDoc(fullDoc);
+    } catch {
+      setPreviewDoc(doc);
+    }
+    setPreviewVersionId(versionId);
+    setIsPreviewOpen(true);
+  };
+
   // Upload Queue Handler
   const handleUploadItemCreated = (item: UploadQueueItem) => {
     setUploadQueue((prev) => [item, ...prev]);
@@ -210,8 +236,9 @@ export default function DocDropHome() {
       });
     }
 
-    // Add document to list
+    // Add document to list & refresh storage analytics
     setDocuments((prev) => [createdDoc, ...prev]);
+    refreshAnalytics();
   };
 
   const handleDocumentUpdated = (updatedDoc: Document) => {
@@ -219,6 +246,7 @@ export default function DocDropHome() {
     setDocuments((prev) =>
       prev.map((d) => (d.id === updatedDoc.id ? updatedDoc : d))
     );
+    refreshAnalytics();
   };
 
   return (
@@ -242,6 +270,9 @@ export default function DocDropHome() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 space-y-6">
+        {/* Storage Analytics & Disk Usage Meter */}
+        <StorageAnalyticsWidget analytics={analytics} />
+
         {/* Virtual Folders / Tags Section - Multi-select folders */}
         {tags.length > 0 && (
           <section className="space-y-3">
@@ -314,6 +345,7 @@ export default function DocDropHome() {
                     key={doc.id}
                     document={doc}
                     onClick={() => handleOpenDetail(doc)}
+                    onPreview={(d) => handleOpenPreview(d)}
                   />
                 ))}
               </div>
@@ -321,6 +353,7 @@ export default function DocDropHome() {
               <DocumentListView
                 documents={sortedDocuments}
                 onSelect={(doc) => handleOpenDetail(doc)}
+                onPreview={(d) => handleOpenPreview(d)}
               />
             )
           ) : (
@@ -375,8 +408,27 @@ export default function DocDropHome() {
         onDocumentDeleted={(deletedId) => {
           setDocuments((prev) => prev.filter((d) => d.id !== deletedId));
           setIsDetailOpen(false);
+          refreshAnalytics();
         }}
+        onPreviewDocument={(doc, verId) => handleOpenPreview(doc, verId)}
         allTags={tags}
+      />
+
+      {/* In-App Document Preview Modal */}
+      <DocumentPreviewModal
+        document={previewDoc}
+        initialVersionId={previewVersionId}
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        onActivityOccurred={async (docId) => {
+          try {
+            const fresh = await fetchDocumentById(docId);
+            if (selectedDoc?.id === docId) setSelectedDoc(fresh);
+            if (previewDoc?.id === docId) setPreviewDoc(fresh);
+          } catch {
+            // Ignore
+          }
+        }}
       />
     </div>
   );

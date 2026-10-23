@@ -203,7 +203,7 @@ export class DocumentController {
   async view(req: Request, res: Response, next: NextFunction) {
     try {
       const { versionId } = req.params;
-      const version = await documentService.getVersionForDownload(versionId);
+      const version = await documentService.getVersionForDownload(versionId, 'VIEW');
 
       // Resolve path handling both relative and absolute paths
       let filePath = version.file_path;
@@ -235,7 +235,7 @@ export class DocumentController {
   async download(req: Request, res: Response, next: NextFunction) {
     try {
       const { versionId } = req.params;
-      const version = await documentService.getVersionForDownload(versionId);
+      const version = await documentService.getVersionForDownload(versionId, 'DOWNLOAD');
 
       let filePath = version.file_path;
       if (!path.isAbsolute(filePath)) {
@@ -281,6 +281,19 @@ export class DocumentController {
     try {
       const metadata = await documentService.getMetadata();
       return sendSuccess(res, metadata);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Get repository storage analytics
+   * GET /api/analytics
+   */
+  async getAnalytics(req: Request, res: Response, next: NextFunction) {
+    try {
+      const analytics = await documentService.getStorageAnalytics();
+      return sendSuccess(res, analytics);
     } catch (err) {
       next(err);
     }

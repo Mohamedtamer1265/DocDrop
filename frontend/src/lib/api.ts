@@ -1,4 +1,4 @@
-import { Document, DocumentVersion, MetadataResponse, ApiResponse } from '../types';
+import { Document, DocumentVersion, MetadataResponse, ApiResponse, StorageAnalytics } from '../types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -105,6 +105,18 @@ export async function fetchMetadata(): Promise<MetadataResponse> {
     throw new Error(`Failed to fetch metadata (${res.status})`);
   }
   const json: ApiResponse<MetadataResponse> = await res.json();
+  return json.data;
+}
+
+/**
+ * Fetch repository storage analytics (total bytes, quota, department & file type breakdown)
+ */
+export async function fetchStorageAnalytics(): Promise<StorageAnalytics> {
+  const res = await fetch(`${API_BASE_URL}/analytics`, { cache: 'no-store' });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch analytics (${res.status})`);
+  }
+  const json: ApiResponse<StorageAnalytics> = await res.json();
   return json.data;
 }
 

@@ -6,9 +6,32 @@ import {
   Tag,
   User,
   SearchDocumentsQuery,
+  ActivityLog,
+  StorageAnalytics,
 } from '../types/document.types';
 
 export class DocumentRepository {
+  private activityTableEnsured = false;
+
+  private async ensureActivityTable(): Promise<void> {
+    if (this.activityTableEnsured) return;
+    try {
+      await query(`
+        CREATE TABLE IF NOT EXISTS document_activity_logs (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+          action VARCHAR(100) NOT NULL,
+          actor_name VARCHAR(255) NOT NULL DEFAULT 'System',
+          details TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_activity_logs_doc_id ON document_activity_logs(document_id);
+      `);
+      this.activityTableEnsured = true;
+    } catch {
+      // Ignore if unable to run DDL
+    }
+  }
   /**
    * Search documents with optional filters for title, tag, uploader, and department permission
    */
@@ -187,7 +210,45 @@ export class DocumentRepository {
     );
 
     doc.versions = versionsRes.rows;
+
+    // Fetch chronological activity & audit logs
+    try {
+      await this.ensureActivityTable();
+      const logsRes = await query<ActivityLog>(
+        `SELECT id, document_id, action, actor_name, details, created_at
+         FROM document_activity_logs
+         WHERE document_id = $1
+         ORDER BY created_at DESC
+         LIMIT 50`,
+        [id]
+      );
+      doc.activity_logs = logsRes.rows;
+    } catch {
+      doc.activity_logs = [];
+    }
+
     return doc;
+  }
+
+  /**
+   * Record an entry in the document activity & audit trail
+   */
+  async logActivity(
+    documentId: string,
+    action: string,
+    actorName: string = 'Authorized User',
+    details: string = ''
+  ): Promise<void> {
+    try {
+      await this.ensureActivityTable();
+      await query(
+        `INSERT INTO document_activity_logs (document_id, action, actor_name, details)
+         VALUES ($1, $2, $3, $4)`,
+        [documentId, action, actorName, details]
+      );
+    } catch {
+      // Non-blocking if table is not yet initialized
+    }
   }
 
   /**
@@ -202,6 +263,7 @@ export class DocumentRepository {
     tagIds: number[] = [],
     departmentIds: number[] = []
   ): Promise<Document> {
+    await this.ensureActivityTable();
     const client = await getClient();
 
     try {
@@ -244,9 +306,22 @@ export class DocumentRepository {
         }
       }
 
+      let actorName = 'Employee';
+      if (uploaderId) {
+        const uRes = await client.query(`SELECT full_name FROM users WHERE id = $1`, [uploaderId]);
+        if (uRes.rows.length > 0) actorName = uRes.rows[0].full_name;
+      }
+
       await client.query('COMMIT');
 
-      // Return full document
+      // 5. Log initial upload activity & return full document with activity_logs
+      await this.logActivity(
+        newDocId,
+        'UPLOAD_INITIAL',
+        actorName,
+        `Created document "${title}" with initial version v1`
+      );
+
       const fullDoc = await this.getDocumentById(newDocId);
       return fullDoc!;
     } catch (err) {
@@ -266,6 +341,7 @@ export class DocumentRepository {
     fileSize: number,
     fileType: string
   ): Promise<DocumentVersion> {
+    await this.ensureActivityTable();
     const client = await getClient();
 
     try {
@@ -298,6 +374,15 @@ export class DocumentRepository {
       ]);
 
       await client.query('COMMIT');
+
+      // Log version upload activity
+      await this.logActivity(
+        documentId,
+        'UPLOAD_VERSION',
+        'Authorized Employee',
+        `Uploaded new revision v${nextVersion}`
+      );
+
       return versionRes.rows[0];
     } catch (err) {
       await client.query('ROLLBACK');
@@ -323,17 +408,18 @@ export class DocumentRepository {
    * Delete a specific version of a document
    */
   async deleteDocumentVersion(versionId: string): Promise<{ filePath: string; documentId: string }> {
+    await this.ensureActivityTable();
     const client = await getClient();
     try {
       await client.query('BEGIN');
       const verRes = await client.query(
-        `SELECT id, document_id, file_path FROM document_versions WHERE id = $1`,
+        `SELECT id, document_id, version_number, file_path FROM document_versions WHERE id = $1`,
         [versionId]
       );
       if (verRes.rows.length === 0) {
         throw new Error('Version not found.');
       }
-      const { document_id, file_path } = verRes.rows[0];
+      const { document_id, version_number, file_path } = verRes.rows[0];
 
       // Check if this is the only version
       const countRes = await client.query(
@@ -351,6 +437,14 @@ export class DocumentRepository {
       );
 
       await client.query('COMMIT');
+
+      await this.logActivity(
+        document_id,
+        'DELETE_VERSION',
+        'EEMW Admin',
+        `Deleted version v${version_number}`
+      );
+
       return { filePath: file_path, documentId: document_id };
     } catch (err) {
       await client.query('ROLLBACK');
@@ -392,6 +486,7 @@ export class DocumentRepository {
     title: string,
     tagIds?: number[]
   ): Promise<Document | null> {
+    await this.ensureActivityTable();
     const client = await getClient();
     try {
       await client.query('BEGIN');
@@ -411,6 +506,14 @@ export class DocumentRepository {
       }
 
       await client.query('COMMIT');
+
+      await this.logActivity(
+        id,
+        'EDIT_METADATA',
+        'EEMW Admin',
+        `Updated document title to "${title.trim()}"${tagIds !== undefined ? ' and updated tags' : ''}`
+      );
+
       return await this.getDocumentById(id);
     } catch (err) {
       await client.query('ROLLBACK');
@@ -463,6 +566,63 @@ export class DocumentRepository {
       ORDER BY u.full_name ASC
     `);
     return res.rows;
+  }
+
+  /**
+   * Compute repository storage analytics across documents, versions, departments, and MIME types
+   */
+  async getStorageAnalytics(): Promise<StorageAnalytics> {
+    const docCountRes = await query(`SELECT COUNT(*)::int as total_documents FROM documents`);
+    const verStatsRes = await query(
+      `SELECT COUNT(*)::int as total_versions, COALESCE(SUM(file_size), 0)::bigint as total_bytes FROM document_versions`
+    );
+
+    const byDeptRes = await query(`
+      SELECT 
+        COALESCE(dept.name, 'General') as department,
+        COUNT(DISTINCT d.id)::int as count,
+        COALESCE(SUM(dv.file_size), 0)::bigint as bytes
+      FROM documents d
+      LEFT JOIN users u ON d.uploader_id = u.id
+      LEFT JOIN departments dept ON u.department_id = dept.id
+      LEFT JOIN document_versions dv ON dv.document_id = d.id
+      GROUP BY COALESCE(dept.name, 'General')
+      ORDER BY bytes DESC
+    `);
+
+    const byTypeRes = await query(`
+      SELECT 
+        CASE
+          WHEN file_type ILIKE '%pdf%' THEN 'PDF Documents'
+          WHEN file_type ILIKE '%image%' THEN 'Images'
+          WHEN file_type ILIKE '%sheet%' OR file_type ILIKE '%excel%' OR file_type ILIKE '%csv%' THEN 'Spreadsheets'
+          WHEN file_type ILIKE '%word%' OR file_type ILIKE '%document%' THEN 'Word Docs'
+          WHEN file_type ILIKE '%text%' OR file_type ILIKE '%markdown%' OR file_type ILIKE '%json%' THEN 'Text & Code'
+          ELSE 'Other Files'
+        END as category,
+        COUNT(*)::int as count,
+        COALESCE(SUM(file_size), 0)::bigint as bytes
+      FROM document_versions
+      GROUP BY category
+      ORDER BY bytes DESC
+    `);
+
+    return {
+      total_documents: Number(docCountRes.rows[0]?.total_documents || 0),
+      total_versions: Number(verStatsRes.rows[0]?.total_versions || 0),
+      total_bytes: Number(verStatsRes.rows[0]?.total_bytes || 0),
+      quota_bytes: 100 * 1024 * 1024, // 100 MB workspace storage tier
+      by_department: byDeptRes.rows.map((r) => ({
+        department: r.department,
+        count: Number(r.count),
+        bytes: Number(r.bytes),
+      })),
+      by_type: byTypeRes.rows.map((r) => ({
+        category: r.category,
+        count: Number(r.count),
+        bytes: Number(r.bytes),
+      })),
+    };
   }
 }
 

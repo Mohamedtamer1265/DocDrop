@@ -79,6 +79,15 @@ export async function initializeDatabaseSchema(): Promise<void> {
       ALTER TABLE document_versions ALTER COLUMN file_type TYPE VARCHAR(255);
       ALTER TABLE document_versions ALTER COLUMN file_size TYPE BIGINT;
       ALTER TABLE documents ALTER COLUMN title TYPE VARCHAR(255);
+      CREATE TABLE IF NOT EXISTS document_activity_logs (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+        action VARCHAR(100) NOT NULL,
+        actor_name VARCHAR(255) NOT NULL DEFAULT 'System',
+        details TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_activity_logs_doc_id ON document_activity_logs(document_id);
     `).catch(() => {
       // Table might not exist yet or columns already updated
     });

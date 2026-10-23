@@ -8,9 +8,10 @@ import { getDownloadUrl, getViewUrl } from '../lib/api';
 interface DocumentCardProps {
   document: Document;
   onClick: () => void;
+  onPreview?: (doc: Document) => void;
 }
 
-export const DocumentCard: React.FC<DocumentCardProps> = ({ document, onClick }) => {
+export const DocumentCard: React.FC<DocumentCardProps> = ({ document, onClick, onPreview }) => {
   // Format file size
   const formatSize = (bytes: number) => {
     if (!bytes || bytes === 0) return '0 B';
@@ -103,16 +104,28 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({ document, onClick })
 
         {document.latest_version_id && (
           <div className="flex items-center space-x-1">
-            <a
-              href={getViewUrl(document.latest_version_id)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-medium"
-              title="View document in browser"
-            >
-              <Eye className="w-3.5 h-3.5" />
-              <span>View</span>
-            </a>
+            {onPreview ? (
+              <button
+                type="button"
+                onClick={() => onPreview(document)}
+                className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-medium"
+                title="Preview document in-app"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>View</span>
+              </button>
+            ) : (
+              <a
+                href={getViewUrl(document.latest_version_id)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-medium"
+                title="View document in browser"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>View</span>
+              </a>
+            )}
             <a
               href={getDownloadUrl(document.latest_version_id)}
               download

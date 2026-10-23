@@ -12,6 +12,9 @@ router.delete('/documents/reset', (req, res, next) =>
 // Metadata lookup (departments, tags, users)
 router.get('/metadata', (req, res, next) => documentController.getMetadata(req, res, next));
 
+// Storage analytics lookup
+router.get('/analytics', (req, res, next) => documentController.getAnalytics(req, res, next));
+
 // Document search & listing
 router.get('/documents', (req, res, next) => documentController.search(req, res, next));
 

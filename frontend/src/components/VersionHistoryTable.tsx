@@ -9,12 +9,16 @@ interface VersionHistoryTableProps {
   versions: DocumentVersion[];
   currentVersion: number;
   onVersionDeleted?: (updatedDoc: any) => void;
+  onPreviewVersion?: (versionId: string) => void;
+  onVersionDownloaded?: () => void;
 }
 
 export const VersionHistoryTable: React.FC<VersionHistoryTableProps> = ({
   versions,
   currentVersion,
   onVersionDeleted,
+  onPreviewVersion,
+  onVersionDownloaded,
 }) => {
   const [deletingVersionId, setDeletingVersionId] = useState<string | null>(null);
   const [deletePassword, setDeletePassword] = useState('');
@@ -120,19 +124,34 @@ export const VersionHistoryTable: React.FC<VersionHistoryTableProps> = ({
 
                   <td className="py-2.5 px-3 text-right">
                     <div className="flex items-center justify-end space-x-2">
-                      <a
-                        href={getViewUrl(v.id)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900 font-medium hover:underline"
-                        title="View file in browser"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        View
-                      </a>
+                      {onPreviewVersion ? (
+                        <button
+                          type="button"
+                          onClick={() => onPreviewVersion(v.id)}
+                          className="inline-flex items-center gap-1 text-slate-700 hover:text-blue-600 font-medium hover:underline"
+                          title="Preview this revision in-app"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          Preview
+                        </button>
+                      ) : (
+                        <a
+                          href={getViewUrl(v.id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900 font-medium hover:underline"
+                          title="View file in browser"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          View
+                        </a>
+                      )}
                       <a
                         href={getDownloadUrl(v.id)}
                         download
+                        onClick={() => {
+                          if (onVersionDownloaded) onVersionDownloaded();
+                        }}
                         className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium hover:underline"
                       >
                         <Download className="w-3.5 h-3.5" />

@@ -7,6 +7,7 @@ import {
   Tag,
   User,
   SearchDocumentsQuery,
+  StorageAnalytics,
 } from '../types/document.types';
 
 export class DocumentService {
@@ -29,20 +30,10 @@ export class DocumentService {
   }
 
   /**
-   * Get single document by ID
+   * Get single document by ID (always live from PostgreSQL so versions & activity logs are real-time)
    */
   async getDocumentById(id: string): Promise<Document | null> {
-    const cacheKey = `doc:${id}`;
-    const cached = await getCached<Document>(cacheKey);
-    if (cached) {
-      return cached;
-    }
-
-    const doc = await this.repo.getDocumentById(id);
-    if (doc) {
-      await setCached(cacheKey, doc, 120);
-    }
-    return doc;
+    return await this.repo.getDocumentById(id);
   }
 
   /**
@@ -143,13 +134,25 @@ export class DocumentService {
   }
 
   /**
-   * Fetch specific version file details for download
+   * Fetch specific version file details for download or inline preview
    */
-  async getVersionForDownload(versionId: string): Promise<DocumentVersion> {
+  async getVersionForDownload(
+    versionId: string,
+    actionType?: 'VIEW' | 'DOWNLOAD'
+  ): Promise<DocumentVersion> {
     const version = await this.repo.getVersionById(versionId);
     if (!version) {
       throw new Error('Requested document version not found.');
     }
+
+    if (actionType) {
+      const details =
+        actionType === 'VIEW'
+          ? `Previewed version v${version.version_number} inline`
+          : `Downloaded version v${version.version_number}`;
+      await this.repo.logActivity(version.document_id, actionType, 'Workspace User', details);
+    }
+
     return version;
   }
 
@@ -279,6 +282,13 @@ export class DocumentService {
     ]);
 
     return { departments, tags, users };
+  }
+
+  /**
+   * Get storage analytics across the repository
+   */
+  async getStorageAnalytics(): Promise<StorageAnalytics> {
+    return await this.repo.getStorageAnalytics();
   }
 }
 
