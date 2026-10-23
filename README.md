@@ -2,6 +2,8 @@
 
 A secure, scalable, and user-friendly Document Repository Proof of Concept (POC) where employees can upload, store, version, and search corporate documents (such as policies, reports, and technical documentation).
 
+> **🎥 Quick Overview About the Project:** [Watch the Project Walkthrough & Demo](https://drive.google.com/file/d/1OWb7VFQ-nmDhIqqpCGpotA6Iucxamdie/view?usp=sharing)
+
 ---
 
 ## Deliverable 1: System Architecture & Design Choices
