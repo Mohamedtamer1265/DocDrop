@@ -298,6 +298,26 @@ export class DocumentController {
       next(err);
     }
   }
+
+  /**
+   * Update an employee's access permissions (Admin action, requires EEMW password)
+   * PUT /api/users/:id/permissions
+   */
+  async updateUserPermissions(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const { can_upload, can_view, password } = req.body;
+      const updated = await documentService.updateUserPermissions(
+        id,
+        Boolean(can_upload),
+        Boolean(can_view),
+        password
+      );
+      return sendSuccess(res, updated, 'User permissions updated successfully.');
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export default new DocumentController();

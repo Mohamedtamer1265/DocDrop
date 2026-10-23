@@ -12,6 +12,27 @@ import {
 
 export class DocumentRepository {
   private activityTableEnsured = false;
+  private userRolesEnsured = false;
+
+  private async ensureUserRoles(): Promise<void> {
+    if (this.userRolesEnsured) return;
+    try {
+      await query(`
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(100) DEFAULT 'Editor (Upload & View)';
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS can_upload BOOLEAN DEFAULT TRUE;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS can_view BOOLEAN DEFAULT TRUE;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
+        INSERT INTO users (full_name, email, department_id, role, can_upload, can_view, is_admin)
+        SELECT 'EEMW Admin', 'admin@docdrop.internal', NULL, 'System Admin', TRUE, TRUE, TRUE
+        WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'admin@docdrop.internal');
+        UPDATE users SET role = 'System Admin', can_upload = TRUE, can_view = TRUE, is_admin = TRUE WHERE email = 'admin@docdrop.internal';
+        UPDATE users SET role = 'Editor (Upload & View)', is_admin = FALSE WHERE email = 'diana@docdrop.internal' AND role = 'Admin (Upload & View)';
+      `);
+      this.userRolesEnsured = true;
+    } catch {
+      // Ignore
+    }
+  }
 
   private async ensureActivityTable(): Promise<void> {
     if (this.activityTableEnsured) return;
@@ -556,16 +577,63 @@ export class DocumentRepository {
   }
 
   /**
-   * Fetch all users
+   * Fetch all users with their department and role permissions
    */
   async getUsers(): Promise<User[]> {
+    await this.ensureUserRoles();
     const res = await query<User>(`
-      SELECT u.id, u.full_name, u.email, u.department_id, d.name as department_name, u.created_at
+      SELECT 
+        u.id, 
+        u.full_name, 
+        u.email, 
+        u.department_id, 
+        d.name as department_name, 
+        COALESCE(u.role, 'Editor (Upload & View)') as role,
+        COALESCE(u.can_upload, TRUE) as can_upload,
+        COALESCE(u.can_view, TRUE) as can_view,
+        COALESCE(u.is_admin, FALSE) as is_admin,
+        u.created_at
       FROM users u
       LEFT JOIN departments d ON u.department_id = d.id
-      ORDER BY u.full_name ASC
+      ORDER BY COALESCE(u.is_admin, FALSE) ASC, u.full_name ASC
     `);
     return res.rows;
+  }
+
+  /**
+   * Fetch single user by ID to check role permissions
+   */
+  async getUserById(id: string): Promise<User | null> {
+    await this.ensureUserRoles();
+    const res = await query<User>(
+      `SELECT id, full_name, email, department_id, COALESCE(role, 'Editor (Upload & View)') as role, COALESCE(can_upload, TRUE) as can_upload, COALESCE(can_view, TRUE) as can_view, COALESCE(is_admin, FALSE) as is_admin, created_at FROM users WHERE id = $1`,
+      [id]
+    );
+    return res.rows[0] || null;
+  }
+
+  /**
+   * Update a user's role and upload/view access permissions (Admin action)
+   */
+  async updateUserPermissions(
+    userId: string,
+    canUpload: boolean,
+    canView: boolean,
+    roleName: string
+  ): Promise<User | null> {
+    await this.ensureUserRoles();
+    await query(
+      `UPDATE users SET can_upload = $1, can_view = $2, role = $3 WHERE id = $4`,
+      [canUpload, canView, roleName, userId]
+    );
+    const res = await query<User>(
+      `SELECT u.id, u.full_name, u.email, u.department_id, d.name as department_name, u.role, u.can_upload, u.can_view, COALESCE(u.is_admin, FALSE) as is_admin, u.created_at
+       FROM users u
+       LEFT JOIN departments d ON u.department_id = d.id
+       WHERE u.id = $1`,
+      [userId]
+    );
+    return res.rows[0] || null;
   }
 
   /**

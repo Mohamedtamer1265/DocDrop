@@ -11,6 +11,10 @@ import {
   User as UserIcon,
   Folder,
   ShieldAlert,
+  Lock,
+  ShieldCheck,
+  Eye,
+  Users,
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -28,6 +32,7 @@ interface NavbarProps {
   activeUser: User | null;
   onUserChange: (user: User) => void;
   onOpenUpload: () => void;
+  onOpenAdminAccess?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -44,6 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeUser,
   onUserChange,
   onOpenUpload,
+  onOpenAdminAccess,
 }) => {
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
@@ -190,22 +196,55 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </div>
 
-          {/* User/Department Switcher (Simulates RBAC) */}
+          {/* User/Department/Role Switcher (Simulates RBAC) */}
           <div className="relative">
             <button
               onClick={() => setUserDropdownOpen(!userDropdownOpen)}
               className="flex items-center space-x-2 pl-2 pr-3 py-1 bg-slate-100 hover:bg-slate-200/70 rounded-full transition-colors border border-slate-200 text-left"
-              title="Switch user to test department permissions"
+              title="Switch user to test role & department permissions"
             >
-              <div className="h-7 w-7 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">
+              <div
+                className={`h-7 w-7 rounded-full text-white text-xs font-bold flex items-center justify-center ${
+                  activeUser?.is_admin
+                    ? 'bg-indigo-600'
+                    : activeUser?.can_view === false
+                    ? 'bg-red-600'
+                    : activeUser?.can_upload === false
+                    ? 'bg-amber-600'
+                    : 'bg-blue-600'
+                }`}
+              >
                 {initials}
               </div>
               <div className="hidden sm:block text-xs">
-                <p className="font-semibold text-slate-800 leading-tight">
-                  {activeUser ? activeUser.full_name : 'Guest'}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-semibold text-slate-800 leading-tight">
+                    {activeUser ? activeUser.full_name : 'Guest'}
+                  </p>
+                  {activeUser && (
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${
+                        activeUser.is_admin
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                          : activeUser.can_view === false
+                          ? 'bg-red-50 text-red-700 border-red-200'
+                          : activeUser.can_upload === false
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}
+                    >
+                      {activeUser.is_admin
+                        ? 'System Admin'
+                        : activeUser.can_view === false
+                        ? 'No Access'
+                        : activeUser.can_upload === false
+                        ? 'View Only'
+                        : 'Upload & View'}
+                    </span>
+                  )}
+                </div>
                 <p className="text-[10px] text-slate-500">
-                  {activeUser?.department_name || 'All Access'}
+                  {activeUser?.is_admin ? 'Manage User Access' : activeUser?.department_name || 'All Access'}
                 </p>
               </div>
               <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
@@ -213,51 +252,118 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {userDropdownOpen && (
               <div
-                className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-100 p-2 z-40 text-xs"
+                className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-100 p-2 z-40 text-xs"
                 onMouseLeave={() => setUserDropdownOpen(false)}
               >
                 <div className="px-3 py-1.5 text-slate-400 font-medium border-b border-slate-100">
-                  Select Active Employee (Access Control)
+                  Switch Account (Role & Access Control)
                 </div>
-                {users.map((u) => (
-                  <button
-                    key={u.id}
-                    onClick={() => {
-                      onUserChange(u);
-                      setUserDropdownOpen(false);
-                    }}
-                    className={`w-full flex items-center space-x-2 px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeUser?.id === u.id
-                        ? 'bg-blue-50 text-blue-700 font-semibold'
-                        : 'hover:bg-slate-50 text-slate-700'
-                    }`}
-                  >
-                    <div className="h-6 w-6 rounded-full bg-slate-200 text-slate-700 font-semibold text-[10px] flex items-center justify-center">
-                      {u.full_name
-                        .split(' ')
-                        .map((n) => n[0])
-                        .join('')}
-                    </div>
-                    <div>
-                      <p className="leading-tight">{u.full_name}</p>
-                      <p className="text-[10px] text-slate-500 font-normal">
-                        Dept: {u.department_name || 'Unassigned'}
-                      </p>
-                    </div>
-                  </button>
-                ))}
+                {users.map((u) => {
+                  const isAdmin = Boolean(u.is_admin);
+                  const canView = u.can_view !== false;
+                  const canUpload = u.can_upload !== false;
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => {
+                        onUserChange(u);
+                        setUserDropdownOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${
+                        activeUser?.id === u.id
+                          ? 'bg-blue-50 text-blue-700 font-semibold'
+                          : 'hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <div
+                          className={`h-7 w-7 rounded-full font-semibold text-[10px] flex items-center justify-center text-white ${
+                            isAdmin
+                              ? 'bg-indigo-600'
+                              : !canView
+                              ? 'bg-red-600'
+                              : !canUpload
+                              ? 'bg-amber-600'
+                              : 'bg-blue-600'
+                          }`}
+                        >
+                          {u.full_name
+                            .split(' ')
+                            .map((n) => n[0])
+                            .join('')}
+                        </div>
+                        <div>
+                          <p className="leading-tight font-semibold flex items-center gap-1">
+                            {u.full_name}
+                            {isAdmin && <Lock className="w-3 h-3 text-indigo-600" />}
+                          </p>
+                          <p className="text-[10px] text-slate-500 font-normal">
+                            {isAdmin
+                              ? 'Password Required (EEMW)'
+                              : `Dept: ${u.department_name || 'Unassigned'}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          isAdmin
+                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                            : !canView
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : !canUpload
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        }`}
+                      >
+                        {isAdmin
+                          ? 'System Admin'
+                          : !canView
+                          ? 'No Access'
+                          : !canUpload
+                          ? 'View Only'
+                          : 'Upload & View'}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
 
-          {/* Upload Button */}
-          <button
-            onClick={onOpenUpload}
-            className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-sm shadow-blue-500/25 transition-all active:scale-95"
-          >
-            <Upload className="h-4 w-4" />
-            <span className="hidden sm:inline">Upload</span>
-          </button>
+          {/* Admin Manage Users Button (Visible when logged in as EEMW Admin) */}
+          {activeUser?.is_admin && onOpenAdminAccess && (
+            <button
+              type="button"
+              onClick={onOpenAdminAccess}
+              className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-xl shadow-sm transition-all"
+              title="Open Employee Access & Role Management"
+            >
+              <Users className="h-4 w-4" />
+              <span className="hidden md:inline">Manage Users</span>
+            </button>
+          )}
+
+          {/* Upload Button (Respects Role Permission) */}
+          {activeUser && activeUser.can_upload === false ? (
+            <button
+              type="button"
+              disabled
+              title={`Upload disabled for role: ${activeUser.role || 'Restricted'}`}
+              className="flex items-center space-x-1.5 bg-slate-100 text-slate-400 text-sm font-semibold px-4 py-2 rounded-xl border border-slate-200 cursor-not-allowed select-none"
+            >
+              <Lock className="h-4 w-4 text-slate-400" />
+              <span className="hidden sm:inline">Upload Locked</span>
+            </button>
+          ) : (
+            <button
+              onClick={onOpenUpload}
+              className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-sm shadow-blue-500/25 transition-all active:scale-95"
+            >
+              <Upload className="h-4 w-4" />
+              <span className="hidden sm:inline">Upload</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

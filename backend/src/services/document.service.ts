@@ -53,6 +53,16 @@ export class DocumentService {
       throw new Error('A file must be attached.');
     }
 
+    // Check role upload permission if uploaderId is provided
+    if (uploaderId) {
+      const uploader = await this.repo.getUserById(uploaderId);
+      if (uploader && uploader.can_upload === false) {
+        throw new Error(
+          `Access Denied: ${uploader.full_name} (${uploader.role}) does not have permission to upload documents.`
+        );
+      }
+    }
+
     // Resolve any custom/new tags by name into tag IDs
     const resolvedTagIds: number[] = [];
     for (const tag of tags) {
@@ -289,6 +299,32 @@ export class DocumentService {
    */
   async getStorageAnalytics(): Promise<StorageAnalytics> {
     return await this.repo.getStorageAnalytics();
+  }
+
+  /**
+   * Update user role & access permissions (requires company password EEMW)
+   */
+  async updateUserPermissions(
+    userId: string,
+    canUpload: boolean,
+    canView: boolean,
+    password?: string
+  ): Promise<User> {
+    if (password !== 'EEMW') {
+      throw new Error('Unauthorized: Admin password EEMW is required to modify user access.');
+    }
+
+    const roleName = !canView
+      ? 'Restricted (No Access)'
+      : !canUpload
+      ? 'Viewer (View Only)'
+      : 'Editor (Upload & View)';
+
+    const updated = await this.repo.updateUserPermissions(userId, canUpload, canView, roleName);
+    if (!updated) {
+      throw new Error('User not found.');
+    }
+    return updated;
   }
 }
 

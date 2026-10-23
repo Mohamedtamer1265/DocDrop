@@ -22,7 +22,7 @@ import {
   Activity,
   History,
 } from 'lucide-react';
-import { Document, DocumentVersion, Tag, ActivityLog } from '../types';
+import { Document, DocumentVersion, Tag, ActivityLog, User as AppUser } from '../types';
 import { VersionHistoryTable } from './VersionHistoryTable';
 import { getDownloadUrl, getViewUrl, uploadNewVersion, fetchDocumentById, updateDocument, deleteDocument } from '../lib/api';
 
@@ -34,6 +34,7 @@ interface DocumentDetailModalProps {
   onDocumentDeleted: (deletedId: string) => void;
   onPreviewDocument?: (doc: Document, versionId?: string) => void;
   allTags?: Tag[];
+  activeUser?: AppUser | null;
 }
 
 export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
@@ -44,6 +45,7 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
   onDocumentDeleted,
   onPreviewDocument,
   allTags = [],
+  activeUser,
 }) => {
   const [isUploadingVersion, setIsUploadingVersion] = useState(false);
   const [versionSuccess, setVersionSuccess] = useState<string | null>(null);
@@ -272,15 +274,27 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
                 onChange={handleNewVersionUpload}
                 className="hidden"
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploadingVersion}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200/80 text-slate-800 text-sm font-semibold py-2.5 px-4 rounded-xl border border-slate-200 transition-colors disabled:opacity-50"
-              >
-                <Upload className="w-4 h-4 text-slate-600" />
-                {isUploadingVersion ? 'Uploading revision...' : 'Upload New Version'}
-              </button>
+              {activeUser && activeUser.can_upload === false ? (
+                <button
+                  type="button"
+                  disabled
+                  title="Your role is View-Only and cannot upload new versions"
+                  className="flex items-center gap-2 bg-slate-100 text-slate-400 text-sm font-semibold py-2.5 px-4 rounded-xl border border-slate-200 cursor-not-allowed"
+                >
+                  <Lock className="w-4 h-4 text-slate-400" />
+                  Upload New Version (Locked)
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingVersion}
+                  className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200/80 text-slate-800 text-sm font-semibold py-2.5 px-4 rounded-xl border border-slate-200 transition-colors disabled:opacity-50"
+                >
+                  <Upload className="w-4 h-4 text-slate-600" />
+                  {isUploadingVersion ? 'Uploading revision...' : 'Upload New Version'}
+                </button>
+              )}
             </div>
 
             {/* Edit & Delete Action Buttons */}

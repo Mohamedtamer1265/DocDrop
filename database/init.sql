@@ -11,6 +11,10 @@ CREATE TABLE IF NOT EXISTS users (
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL,
+    role VARCHAR(100) DEFAULT 'Editor (Upload & View)',
+    can_upload BOOLEAN DEFAULT TRUE,
+    can_view BOOLEAN DEFAULT TRUE,
+    is_admin BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -88,18 +92,22 @@ INSERT INTO tags (name) VALUES
     ('Design Proposal')
 ON CONFLICT (name) DO NOTHING;
 
--- Seed Sample Employees
-INSERT INTO users (full_name, email, department_id)
-SELECT 'Diana Prince', 'diana@docdrop.internal', d.id
+-- Seed System Admin & Sample Employees with Role Permissions
+INSERT INTO users (full_name, email, department_id, role, can_upload, can_view, is_admin)
+SELECT 'EEMW Admin', 'admin@docdrop.internal', NULL, 'System Admin', TRUE, TRUE, TRUE
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'admin@docdrop.internal');
+
+INSERT INTO users (full_name, email, department_id, role, can_upload, can_view, is_admin)
+SELECT 'Diana Prince', 'diana@docdrop.internal', d.id, 'Editor (Upload & View)', TRUE, TRUE, FALSE
 FROM departments d WHERE d.name = 'Legal'
 AND NOT EXISTS (SELECT 1 FROM users WHERE email = 'diana@docdrop.internal');
 
-INSERT INTO users (full_name, email, department_id)
-SELECT 'Alex Chen', 'alex@docdrop.internal', d.id
+INSERT INTO users (full_name, email, department_id, role, can_upload, can_view, is_admin)
+SELECT 'Alex Chen', 'alex@docdrop.internal', d.id, 'Viewer (View Only)', FALSE, TRUE, FALSE
 FROM departments d WHERE d.name = 'Engineering'
 AND NOT EXISTS (SELECT 1 FROM users WHERE email = 'alex@docdrop.internal');
 
-INSERT INTO users (full_name, email, department_id)
-SELECT 'Sarah Connor', 'sarah@docdrop.internal', d.id
+INSERT INTO users (full_name, email, department_id, role, can_upload, can_view, is_admin)
+SELECT 'Sarah Connor', 'sarah@docdrop.internal', d.id, 'Restricted (No Access)', FALSE, FALSE, FALSE
 FROM departments d WHERE d.name = 'Finance'
 AND NOT EXISTS (SELECT 1 FROM users WHERE email = 'sarah@docdrop.internal');

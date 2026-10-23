@@ -9,6 +9,10 @@ export interface User {
   email: string;
   department_id: number | null;
   department_name?: string;
+  role?: string;
+  can_upload?: boolean;
+  can_view?: boolean;
+  is_admin?: boolean;
   created_at: string;
 }
 

@@ -1,4 +1,4 @@
-import { Document, DocumentVersion, MetadataResponse, ApiResponse, StorageAnalytics } from '../types';
+import { Document, DocumentVersion, MetadataResponse, ApiResponse, StorageAnalytics, User } from '../types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -117,6 +117,25 @@ export async function fetchStorageAnalytics(): Promise<StorageAnalytics> {
     throw new Error(`Failed to fetch analytics (${res.status})`);
   }
   const json: ApiResponse<StorageAnalytics> = await res.json();
+  return json.data;
+}
+
+/**
+ * Update an employee's access permissions (Admin only, requires EEMW password)
+ */
+export async function updateUserPermissions(
+  userId: string,
+  data: { can_upload: boolean; can_view: boolean; password: string }
+): Promise<User> {
+  const res = await fetch(`${API_BASE_URL}/users/${userId}/permissions`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const json: ApiResponse<User> = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.message || 'Failed to update user permissions.');
+  }
   return json.data;
 }
 

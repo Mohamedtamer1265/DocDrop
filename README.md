@@ -63,10 +63,14 @@ flowchart TD
 ## Key Features
 
 * **In-App Document Preview Modal:** Preview PDFs (`<iframe>`), images (with interactive zoom controls), and text/code/CSV/JSON files inline without switching browser tabs, complete with a live revision switcher (`v1`, `v2`, etc.).
-* **Compliance Activity & Audit Log:** Tracks and displays a chronological timeline of `UPLOAD_INITIAL`, `UPLOAD_VERSION`, `EDIT_METADATA`, `DELETE_VERSION`, `VIEW`, and `DOWNLOAD` events per document.
+* **Compliance Activity & Audit Log:** Tracks and displays a live chronological timeline of `UPLOAD_INITIAL`, `UPLOAD_VERSION`, `EDIT_METADATA`, `DELETE_VERSION`, `VIEW`, and `DOWNLOAD` events per document.
 * **Storage Analytics & Disk Usage Widget:** Live storage meter (`X MB / 100 MB`) with expandable breakdowns by department and file format across all revisions.
 * **Multi-Folder Virtual Tag Filtering:** Select multiple virtual folders simultaneously with full browser Back/Forward history integration, combined with real-time search across titles, tags, and uploaders.
-* **Password-Protected Document & Revision Management:** Edit document titles and tags, or delete entire documents and individual versions after verifying the company password (`EEMW`).
+* **Role-Based Access Control & Admin User Management:** Switch between employees with distinct permission tiers (`Upload & View`, `View Only`, `No Access`) or unlock the **EEMW System Admin** account to grant/revoke employee permissions live.
+* **Universal Company Authorization Password (`EEMW`):** All privileged and destructive actions use the company password **`EEMW`**:
+  * Switching to the **EEMW Admin** account and modifying employee access levels (`Upload & View`, `View Only`, `No Access`).
+  * Editing any document's title and category tags.
+  * Deleting an entire document or removing specific historical revisions.
 
 ---
 
@@ -93,6 +97,10 @@ erDiagram
         varchar full_name
         varchar email UK
         int department_id FK
+        varchar role
+        boolean can_upload
+        boolean can_view
+        boolean is_admin
         timestamp created_at
     }
 
@@ -191,6 +199,7 @@ DocDrop/
         │   └── page.tsx                  # Main DocDrop dashboard (analytics, folders, grid/list)
         ├── components/
         │   ├── Navbar.tsx                # Brand, search bar, active tag pills, sort & user switcher
+        │   ├── AdminAccessModal.tsx      # Dedicated System Admin modal to manage employee permissions
         │   ├── StorageAnalyticsWidget.tsx# Disk usage meter with department & file-type breakdown
         │   ├── FolderCard.tsx            # Multi-select virtual folder cards for category tags
         │   ├── DocumentCard.tsx          # File card with type badge, in-app preview & download

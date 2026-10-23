@@ -79,6 +79,14 @@ export async function initializeDatabaseSchema(): Promise<void> {
       ALTER TABLE document_versions ALTER COLUMN file_type TYPE VARCHAR(255);
       ALTER TABLE document_versions ALTER COLUMN file_size TYPE BIGINT;
       ALTER TABLE documents ALTER COLUMN title TYPE VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(100) DEFAULT 'Editor (Upload & View)';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS can_upload BOOLEAN DEFAULT TRUE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS can_view BOOLEAN DEFAULT TRUE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
+      INSERT INTO users (full_name, email, department_id, role, can_upload, can_view, is_admin)
+      SELECT 'EEMW Admin', 'admin@docdrop.internal', NULL, 'System Admin', TRUE, TRUE, TRUE
+      WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'admin@docdrop.internal');
+      UPDATE users SET role = 'System Admin', can_upload = TRUE, can_view = TRUE, is_admin = TRUE WHERE email = 'admin@docdrop.internal';
       CREATE TABLE IF NOT EXISTS document_activity_logs (
         id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
         document_id UUID REFERENCES documents(id) ON DELETE CASCADE,

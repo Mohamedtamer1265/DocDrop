@@ -12,6 +12,11 @@ router.delete('/documents/reset', (req, res, next) =>
 // Metadata lookup (departments, tags, users)
 router.get('/metadata', (req, res, next) => documentController.getMetadata(req, res, next));
 
+// Update user access permissions (Admin only with EEMW password)
+router.put('/users/:id/permissions', (req, res, next) =>
+  documentController.updateUserPermissions(req, res, next)
+);
+
 // Storage analytics lookup
 router.get('/analytics', (req, res, next) => documentController.getAnalytics(req, res, next));
 
