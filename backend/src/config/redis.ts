@@ -9,40 +9,38 @@ const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379', 10);
 export const redisClient = createClient({
   url: `redis://${REDIS_HOST}:${REDIS_PORT}`,
   socket: {
-    reconnectStrategy: (retries: number) => {
-      // Reconnect after 3 seconds, max 5 attempts
-      if (retries > 5) {
-        return false;
-      }
-      return 3000;
-    },
+    // Keep retrying in background every 5s so Redis can reconnect when started later
+    reconnectStrategy: (retries: number) => Math.min(retries * 500, 5000),
   },
 });
 
-let isRedisConnected = false;
+let isRedisReady = false;
 
-redisClient.on('connect', () => {
-  isRedisConnected = true;
-  console.log('[Redis] Connected successfully to cache server.');
+// Fix 2: Set flag on 'ready' (when client is authenticated & can process commands)
+redisClient.on('ready', () => {
+  isRedisReady = true;
+  console.log('[Redis] Cache server is ready and connected.');
 });
 
-redisClient.on('error', (err: Error) => {
-  isRedisConnected = false;
-  // Non-fatal warning: redis is optional in POC
+redisClient.on('end', () => {
+  isRedisReady = false;
 });
 
-// Attempt initial connection without crashing if Redis isn't running
+redisClient.on('error', () => {
+  isRedisReady = false;
+});
+
+// Non-blocking initial connect
 (async () => {
   try {
     await redisClient.connect();
-  } catch (err: any) {
-    // Redis optional fallback
-    isRedisConnected = false;
+  } catch {
+    isRedisReady = false;
   }
 })();
 
 export async function getCached<T>(key: string): Promise<T | null> {
-  if (!isRedisConnected) return null;
+  if (!isRedisReady) return null;
   try {
     const data = await redisClient.get(key);
     return data ? JSON.parse(data) : null;
@@ -52,23 +50,27 @@ export async function getCached<T>(key: string): Promise<T | null> {
 }
 
 export async function setCached(key: string, value: any, ttlSeconds: number = 60): Promise<void> {
-  if (!isRedisConnected) return;
+  if (!isRedisReady) return;
   try {
     await redisClient.setEx(key, ttlSeconds, JSON.stringify(value));
   } catch {
-    // Ignore cache failure
+    // Fail-safe: cache write error does not block the request
   }
 }
 
+// Fix 1: Use non-blocking SCAN iterator instead of blocking KEYS
 export async function invalidateCachePattern(pattern: string): Promise<void> {
-  if (!isRedisConnected) return;
+  if (!isRedisReady) return;
   try {
-    const keys = await redisClient.keys(pattern);
-    if (keys.length > 0) {
-      await redisClient.del(keys);
+    const keysToDelete: string[] = [];
+    for await (const key of redisClient.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+      keysToDelete.push(key);
+    }
+    if (keysToDelete.length > 0) {
+      await redisClient.del(keysToDelete);
     }
   } catch {
-    // Ignore cache failure
+    // Fail-safe: cache invalidation error does not block the request
   }
 }
 

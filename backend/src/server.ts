@@ -19,7 +19,10 @@ async function bootstrap() {
       await initializeDatabaseSchema();
     } else {
       console.warn(`[DocDrop API] PostgreSQL connection warning: ${dbStatus.error}`);
-      console.warn(`[DocDrop API] Ensure your Docker PostgreSQL container is running: "docker compose up -d"`);
+      console.warn(
+        `[DocDrop API] Tried ${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}. ` +
+          `Ensure the Docker PostgreSQL container is running: "docker-compose up -d"`
+      );
     }
   });
 }

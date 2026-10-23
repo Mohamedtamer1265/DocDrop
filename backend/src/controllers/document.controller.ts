@@ -153,8 +153,11 @@ export class DocumentController {
         return sendError(res, 'Physical file not found on disk storage.', 404);
       }
 
-      const fileName = path.basename(filePath);
-      return res.download(filePath, fileName);
+      // Stored as "<timestamp>-<name>.<ext>" -> downloaded as "docdrop-<name>.<ext>"
+      const storedName = path.basename(filePath);
+      const originalName = storedName.replace(/^\d+-/, '');
+      const downloadName = `docdrop-${originalName}`;
+      return res.download(filePath, downloadName);
     } catch (err) {
       next(err);
     }
