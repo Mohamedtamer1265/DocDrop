@@ -1,2 +1,154 @@
-// Document Service (Business Logic Layer)
+import documentRepository, { DocumentRepository } from '../repositories/document.repository';
+import { getCached, setCached, invalidateCachePattern } from '../config/redis';
+import {
+  Document,
+  DocumentVersion,
+  Department,
+  Tag,
+  User,
+  SearchDocumentsQuery,
+} from '../types/document.types';
 
+export class DocumentService {
+  constructor(private repo: DocumentRepository = documentRepository) {}
+
+  /**
+   * Search documents with Redis caching
+   */
+  async searchDocuments(filters: SearchDocumentsQuery): Promise<Document[]> {
+    const cacheKey = `search:${JSON.stringify(filters)}`;
+    const cached = await getCached<Document[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const results = await this.repo.searchDocuments(filters);
+    // Cache for 60 seconds
+    await setCached(cacheKey, results, 60);
+    return results;
+  }
+
+  /**
+   * Get single document by ID
+   */
+  async getDocumentById(id: string): Promise<Document | null> {
+    const cacheKey = `doc:${id}`;
+    const cached = await getCached<Document>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const doc = await this.repo.getDocumentById(id);
+    if (doc) {
+      await setCached(cacheKey, doc, 120);
+    }
+    return doc;
+  }
+
+  /**
+   * Upload a new document with initial version
+   */
+  async uploadDocument(
+    title: string,
+    uploaderId: string | null,
+    file: Express.Multer.File,
+    tags: number[] = [],
+    departmentPermissions: number[] = []
+  ): Promise<Document> {
+    if (!title || !title.trim()) {
+      throw new Error('Document title is required.');
+    }
+    if (!file) {
+      throw new Error('A file must be attached.');
+    }
+
+    const filePath = file.path.replace(/\\/g, '/');
+    const fileSize = file.size;
+    const fileType = file.mimetype || 'application/octet-stream';
+
+    const doc = await this.repo.createDocumentWithInitialVersion(
+      title.trim(),
+      uploaderId || null,
+      filePath,
+      fileSize,
+      fileType,
+      tags,
+      departmentPermissions
+    );
+
+    // Invalidate search and list caches
+    await invalidateCachePattern('search:*');
+    return doc;
+  }
+
+  /**
+   * Upload a new version for an existing document
+   */
+  async uploadNewVersion(
+    documentId: string,
+    file: Express.Multer.File
+  ): Promise<DocumentVersion> {
+    const doc = await this.repo.getDocumentById(documentId);
+    if (!doc) {
+      throw new Error(`Document with ID "${documentId}" not found.`);
+    }
+
+    if (!file) {
+      throw new Error('A file must be attached for the new version.');
+    }
+
+    const filePath = file.path.replace(/\\/g, '/');
+    const fileSize = file.size;
+    const fileType = file.mimetype || 'application/octet-stream';
+
+    const newVersion = await this.repo.addDocumentVersion(
+      documentId,
+      filePath,
+      fileSize,
+      fileType
+    );
+
+    // Invalidate caches
+    await invalidateCachePattern(`doc:${documentId}`);
+    await invalidateCachePattern('search:*');
+
+    return newVersion;
+  }
+
+  /**
+   * Fetch version history of a document
+   */
+  async getVersionHistory(documentId: string): Promise<DocumentVersion[]> {
+    const doc = await this.repo.getDocumentById(documentId);
+    if (!doc) {
+      throw new Error(`Document with ID "${documentId}" not found.`);
+    }
+    return doc.versions || [];
+  }
+
+  /**
+   * Fetch specific version file details for download
+   */
+  async getVersionForDownload(versionId: string): Promise<DocumentVersion> {
+    const version = await this.repo.getVersionById(versionId);
+    if (!version) {
+      throw new Error('Requested document version not found.');
+    }
+    return version;
+  }
+
+  /**
+   * Get metadata options (departments, tags, employees)
+   */
+  async getMetadata(): Promise<{ departments: Department[]; tags: Tag[]; users: User[] }> {
+    const [departments, tags, users] = await Promise.all([
+      this.repo.getDepartments(),
+      this.repo.getTags(),
+      this.repo.getUsers(),
+    ]);
+
+    return { departments, tags, users };
+  }
+}
+
+export default new DocumentService();
