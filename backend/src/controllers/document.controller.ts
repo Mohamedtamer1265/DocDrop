@@ -20,18 +20,21 @@ export class DocumentController {
       if (!title || !title.trim()) {
         return sendError(res, 'Document title is required.', 400);
       }
+      if (title.trim().length > 255) {
+        return sendError(res, 'Document title cannot exceed 255 characters.', 400);
+      }
 
-      // Parse tags (can be array or comma-separated string)
-      let tags: number[] = [];
+      // Parse tags (can be array of IDs or names)
+      let tags: (number | string)[] = [];
       if (req.body.tags) {
         if (Array.isArray(req.body.tags)) {
-          tags = req.body.tags.map(Number).filter((n: number) => !isNaN(n));
+          tags = req.body.tags;
         } else if (typeof req.body.tags === 'string') {
           try {
             const parsed = JSON.parse(req.body.tags);
-            tags = Array.isArray(parsed) ? parsed.map(Number) : [Number(parsed)];
+            tags = Array.isArray(parsed) ? parsed : [parsed];
           } catch {
-            tags = req.body.tags.split(',').map((s: string) => Number(s.trim())).filter((n: number) => !isNaN(n));
+            tags = req.body.tags.split(',').map((s: string) => s.trim()).filter(Boolean);
           }
         }
       }
@@ -140,7 +143,39 @@ export class DocumentController {
   }
 
   /**
-   * View / download a document version
+   * View / stream file inline in browser
+   * GET /api/documents/view/:versionId
+   */
+  async view(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { versionId } = req.params;
+      const version = await documentService.getVersionForDownload(versionId);
+
+      // Resolve path handling both relative and absolute paths
+      let filePath = version.file_path;
+      if (!path.isAbsolute(filePath)) {
+        filePath = path.resolve(__dirname, '../../', filePath);
+      }
+      if (!fs.existsSync(filePath)) {
+        // Fallback: check uploads directory directly by basename
+        const fallback = path.resolve(__dirname, '../../uploads', path.basename(filePath));
+        if (fs.existsSync(fallback)) {
+          filePath = fallback;
+        } else {
+          return sendError(res, 'Physical file not found on disk storage.', 404);
+        }
+      }
+
+      res.setHeader('Content-Type', version.file_type || 'application/octet-stream');
+      res.setHeader('Content-Disposition', 'inline');
+      return res.sendFile(path.resolve(filePath));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Download a document version (forces download attachment)
    * GET /api/documents/download/:versionId
    */
   async download(req: Request, res: Response, next: NextFunction) {
@@ -148,16 +183,37 @@ export class DocumentController {
       const { versionId } = req.params;
       const version = await documentService.getVersionForDownload(versionId);
 
-      const filePath = path.resolve(version.file_path);
+      let filePath = version.file_path;
+      if (!path.isAbsolute(filePath)) {
+        filePath = path.resolve(__dirname, '../../', filePath);
+      }
       if (!fs.existsSync(filePath)) {
-        return sendError(res, 'Physical file not found on disk storage.', 404);
+        const fallback = path.resolve(__dirname, '../../uploads', path.basename(filePath));
+        if (fs.existsSync(fallback)) {
+          filePath = fallback;
+        } else {
+          return sendError(res, 'Physical file not found on disk storage.', 404);
+        }
       }
 
       // Stored as "<timestamp>-<name>.<ext>" -> downloaded as "docdrop-<name>.<ext>"
       const storedName = path.basename(filePath);
       const originalName = storedName.replace(/^\d+-/, '');
       const downloadName = `docdrop-${originalName}`;
-      return res.download(filePath, downloadName);
+      return res.download(path.resolve(filePath), downloadName);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Reset / Delete all documents and versions (keeps users, departments, tags)
+   * DELETE /api/documents/reset
+   */
+  async resetAllDocuments(req: Request, res: Response, next: NextFunction) {
+    try {
+      await documentService.clearAllDocuments();
+      return sendSuccess(res, null, 'All documents and versions have been deleted.');
     } catch (err) {
       next(err);
     }

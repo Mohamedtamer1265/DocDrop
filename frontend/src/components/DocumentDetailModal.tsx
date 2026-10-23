@@ -14,10 +14,11 @@ import {
   FileText,
   Clock,
   CheckCircle,
+  Eye,
 } from 'lucide-react';
 import { Document, DocumentVersion } from '../types';
 import { VersionHistoryTable } from './VersionHistoryTable';
-import { getDownloadUrl, uploadNewVersion, fetchDocumentById } from '../lib/api';
+import { getDownloadUrl, getViewUrl, uploadNewVersion, fetchDocumentById } from '../lib/api';
 
 interface DocumentDetailModalProps {
   document: Document | null;
@@ -124,14 +125,25 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
           {/* Quick Action Buttons */}
           <div className="flex flex-wrap items-center gap-3">
             {document.latest_version_id && (
-              <a
-                href={getDownloadUrl(document.latest_version_id)}
-                download
-                className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 px-4 rounded-xl shadow-sm shadow-blue-500/20 transition-all"
-              >
-                <Download className="w-4 h-4" />
-                Download Current (v{document.current_version})
-              </a>
+              <>
+                <a
+                  href={getViewUrl(document.latest_version_id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold py-2.5 px-4 rounded-xl shadow-sm transition-all"
+                >
+                  <Eye className="w-4 h-4" />
+                  View in Browser
+                </a>
+                <a
+                  href={getDownloadUrl(document.latest_version_id)}
+                  download
+                  className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 px-4 rounded-xl shadow-sm shadow-blue-500/20 transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Current (v{document.current_version})
+                </a>
+              </>
             )}
 
             <div>

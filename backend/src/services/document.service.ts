@@ -52,7 +52,7 @@ export class DocumentService {
     title: string,
     uploaderId: string | null,
     file: Express.Multer.File,
-    tags: number[] = [],
+    tags: (number | string)[] = [],
     departmentPermissions: number[] = []
   ): Promise<Document> {
     if (!title || !title.trim()) {
@@ -60,6 +60,22 @@ export class DocumentService {
     }
     if (!file) {
       throw new Error('A file must be attached.');
+    }
+
+    // Resolve any custom/new tags by name into tag IDs
+    const resolvedTagIds: number[] = [];
+    for (const tag of tags) {
+      if (typeof tag === 'number') {
+        resolvedTagIds.push(tag);
+      } else if (typeof tag === 'string' && tag.trim()) {
+        const parsedNum = Number(tag);
+        if (!isNaN(parsedNum)) {
+          resolvedTagIds.push(parsedNum);
+        } else {
+          const createdTag = await this.repo.findOrCreateTag(tag);
+          resolvedTagIds.push(createdTag.id);
+        }
+      }
     }
 
     const filePath = file.path.replace(/\\/g, '/');
@@ -72,7 +88,7 @@ export class DocumentService {
       filePath,
       fileSize,
       fileType,
-      tags,
+      resolvedTagIds,
       departmentPermissions
     );
 
@@ -135,6 +151,16 @@ export class DocumentService {
       throw new Error('Requested document version not found.');
     }
     return version;
+  }
+
+  /**
+   * Clear all documents and versions, and flush search cache
+   */
+  async clearAllDocuments(): Promise<void> {
+    const { pool } = await import('../config/db');
+    await pool.query('TRUNCATE TABLE documents CASCADE');
+    await invalidateCachePattern('search:*');
+    await invalidateCachePattern('doc:*');
   }
 
   /**

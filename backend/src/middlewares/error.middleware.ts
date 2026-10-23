@@ -22,6 +22,31 @@ export function errorHandler(
     });
   }
 
+  // PostgreSQL specific errors
+  if (err.code === '22001') {
+    return res.status(400).json({
+      success: false,
+      message: 'Input exceeds maximum allowed length (e.g. title or MIME type too long).',
+      code: err.code,
+    });
+  }
+
+  if (err.code === '23505') {
+    return res.status(409).json({
+      success: false,
+      message: 'A duplicate record already exists.',
+      code: err.code,
+    });
+  }
+
+  if (err.code === '23503') {
+    return res.status(400).json({
+      success: false,
+      message: 'Referenced user, tag, or department does not exist.',
+      code: err.code,
+    });
+  }
+
   const statusCode = err.statusCode || (err.message && err.message.includes('not found') ? 404 : 500);
 
   return res.status(statusCode).json({

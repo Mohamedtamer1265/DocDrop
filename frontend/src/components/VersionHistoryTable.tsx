@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import { Download, History, Calendar, HardDrive, FileCheck } from 'lucide-react';
+import { Download, History, Calendar, HardDrive, FileCheck, Eye } from 'lucide-react';
 import { DocumentVersion } from '../types';
-import { getDownloadUrl } from '../lib/api';
+import { getDownloadUrl, getViewUrl } from '../lib/api';
 
 interface VersionHistoryTableProps {
   versions: DocumentVersion[];
@@ -93,14 +93,26 @@ export const VersionHistoryTable: React.FC<VersionHistoryTableProps> = ({
                   </td>
 
                   <td className="py-2.5 px-3 text-right">
-                    <a
-                      href={getDownloadUrl(v.id)}
-                      download
-                      className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium hover:underline"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      Download
-                    </a>
+                    <div className="flex items-center justify-end space-x-2">
+                      <a
+                        href={getViewUrl(v.id)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900 font-medium hover:underline"
+                        title="View file in browser"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        View
+                      </a>
+                      <a
+                        href={getDownloadUrl(v.id)}
+                        download
+                        className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Download
+                      </a>
+                    </div>
                   </td>
                 </tr>
               );

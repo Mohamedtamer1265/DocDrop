@@ -26,7 +26,8 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
-  const [selectedTags, setSelectedTags] = useState<number[]>([]);
+  const [selectedTags, setSelectedTags] = useState<(number | string)[]>([]);
+  const [customTagInput, setCustomTagInput] = useState('');
   const [isRestricted, setIsRestricted] = useState(false);
   const [selectedDepts, setSelectedDepts] = useState<number[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -60,10 +61,22 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
     }
   };
 
-  const toggleTag = (tagId: number) => {
+  const toggleTag = (tagIdOrName: number | string) => {
     setSelectedTags((prev) =>
-      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+      prev.includes(tagIdOrName)
+        ? prev.filter((id) => id !== tagIdOrName)
+        : [...prev, tagIdOrName]
     );
+  };
+
+  const handleAddCustomTag = (e: React.KeyboardEvent | React.MouseEvent) => {
+    if ('key' in e && e.key !== 'Enter') return;
+    e.preventDefault();
+    const clean = customTagInput.trim();
+    if (clean && !selectedTags.includes(clean)) {
+      setSelectedTags((prev) => [...prev, clean]);
+      setCustomTagInput('');
+    }
   };
 
   const toggleDept = (deptId: number) => {
@@ -214,10 +227,15 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
 
           {/* Tags (Virtual Folders) */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Categories & Tags (Virtual Folders)
-            </label>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-slate-700">
+                Categories & Tags (Virtual Folders)
+              </label>
+              <span className="text-[10px] text-slate-400">Select existing or type custom</span>
+            </div>
+
+            {/* Existing tags */}
+            <div className="flex flex-wrap gap-1.5 mb-2.5">
               {tags.map((t) => {
                 const isSelected = selectedTags.includes(t.id);
                 return (
@@ -235,6 +253,42 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                   </button>
                 );
               })}
+
+              {/* Any newly added custom tags */}
+              {selectedTags
+                .filter((st): st is string => typeof st === 'string')
+                .map((customName) => (
+                  <button
+                    type="button"
+                    key={customName}
+                    onClick={() => toggleTag(customName)}
+                    className="text-xs px-3 py-1.5 rounded-full border bg-emerald-600 text-white border-emerald-600 shadow-sm flex items-center gap-1"
+                  >
+                    <span>+ {customName}</span>
+                    <X className="w-3 h-3 ml-0.5" />
+                  </button>
+                ))}
+            </div>
+
+            {/* Add Custom Tag Input Field */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={customTagInput}
+                onChange={(e) => setCustomTagInput(e.target.value)}
+                onKeyDown={handleAddCustomTag}
+                placeholder="Create custom tag (e.g. 'Project Alpha', 'Budget 2026')..."
+                className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:border-blue-500 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleAddCustomTag}
+                disabled={!customTagInput.trim()}
+                className="px-3 py-1.5 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-900 rounded-xl transition-all disabled:opacity-40 flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Tag
+              </button>
             </div>
           </div>
 

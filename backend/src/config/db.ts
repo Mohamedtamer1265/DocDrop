@@ -61,7 +61,7 @@ export async function testConnection(): Promise<{ connected: boolean; database?:
 }
 
 /**
- * Ensure database schema & initial seed data are populated
+ * Ensure database schema & initial seed data are populated, and apply migrations
  */
 export async function initializeDatabaseSchema(): Promise<void> {
   try {
@@ -73,8 +73,29 @@ export async function initializeDatabaseSchema(): Promise<void> {
     } else {
       console.warn('[PostgreSQL] init.sql not found at:', initSqlPath);
     }
+
+    // Auto-migrate column constraints if table already existed with older VARCHAR(50)
+    await pool.query(`
+      ALTER TABLE document_versions ALTER COLUMN file_type TYPE VARCHAR(255);
+      ALTER TABLE document_versions ALTER COLUMN file_size TYPE BIGINT;
+      ALTER TABLE documents ALTER COLUMN title TYPE VARCHAR(255);
+    `).catch(() => {
+      // Table might not exist yet or columns already updated
+    });
   } catch (err: any) {
     console.error('[PostgreSQL] Schema initialization warning:', err.message);
+  }
+}
+
+/**
+ * Reset and clear all documents and versions (keeps users, departments, and tags)
+ */
+export async function clearAllDocuments(): Promise<void> {
+  try {
+    await pool.query('TRUNCATE TABLE documents CASCADE');
+    console.log('[PostgreSQL] All documents and versions cleared.');
+  } catch (err: any) {
+    console.error('[PostgreSQL] Error clearing documents:', err.message);
   }
 }
 

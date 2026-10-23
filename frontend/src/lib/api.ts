@@ -86,7 +86,14 @@ export async function uploadNewVersion(documentId: string, file: File): Promise<
 }
 
 /**
- * Generate direct download link for a version
+ * Generate direct view/preview link (inline in browser)
+ */
+export function getViewUrl(versionId: string): string {
+  return `${API_BASE_URL}/documents/view/${versionId}`;
+}
+
+/**
+ * Generate direct download link for a version (forced attachment)
  */
 export function getDownloadUrl(versionId: string): string {
   return `${API_BASE_URL}/documents/download/${versionId}`;

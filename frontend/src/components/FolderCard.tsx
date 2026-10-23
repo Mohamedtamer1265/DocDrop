@@ -19,20 +19,17 @@ export const FolderCard: React.FC<FolderCardProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`group relative flex flex-col justify-between p-4 rounded-2xl bg-white border transition-all cursor-pointer select-none ${
+      className={`group relative flex flex-col justify-between p-4 rounded-2xl bg-white border cursor-pointer select-none transition-colors ${
         isSelected
-          ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-md shadow-blue-500/5'
-          : 'border-slate-200/80 hover:border-blue-300 hover:shadow-md hover:shadow-slate-200/50'
+          ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/20'
+          : 'border-slate-200/80 hover:border-slate-300 hover:bg-slate-50/50'
       }`}
     >
       <div className="flex items-start justify-between">
-        {/* Blue Folder Graphic matching screenshot */}
+        {/* Blue Folder Graphic */}
         <div className="w-12 h-10 relative">
-          {/* Back tab */}
           <div className="absolute top-0 left-0 w-5 h-2 bg-blue-500 rounded-t-sm" />
-          {/* Main folder body */}
-          <div className="absolute top-1 left-0 w-12 h-9 bg-blue-600 rounded-lg shadow-sm group-hover:scale-105 transition-transform" />
-          {/* Inner folder accent */}
+          <div className="absolute top-1 left-0 w-12 h-9 bg-blue-600 rounded-lg shadow-sm" />
           <div className="absolute top-2 left-1.5 w-9 h-6 bg-blue-400 rounded-sm opacity-90" />
         </div>
 

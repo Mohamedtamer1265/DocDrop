@@ -55,10 +55,21 @@ export class DocumentRepository {
     const params: any[] = [];
     let paramIndex = 1;
 
-    // Filter by text search (title)
+    // Search across Title, Tags, and Uploader name matching the assessment requirement:
+    // "Searching documents by title, tags, and uploader"
     if (filters.q && filters.q.trim()) {
-      sql += ` AND d.title ILIKE $${paramIndex}`;
-      params.push(`%${filters.q.trim()}%`);
+      const term = `%${filters.q.trim()}%`;
+      sql += ` AND (
+        d.title ILIKE $${paramIndex}
+        OR u.full_name ILIKE $${paramIndex}
+        OR d.id IN (
+          SELECT dt_sub.document_id 
+          FROM document_tags dt_sub
+          JOIN tags t_sub ON dt_sub.tag_id = t_sub.id
+          WHERE t_sub.name ILIKE $${paramIndex}
+        )
+      )`;
+      params.push(term);
       paramIndex++;
     }
 
@@ -314,6 +325,22 @@ export class DocumentRepository {
   async getTags(): Promise<Tag[]> {
     const res = await query<Tag>(`SELECT id, name FROM tags ORDER BY name ASC`);
     return res.rows;
+  }
+
+  /**
+   * Find or create a tag by name
+   */
+  async findOrCreateTag(name: string): Promise<Tag> {
+    const trimmed = name.trim();
+    const existing = await query<Tag>(`SELECT id, name FROM tags WHERE name ILIKE $1 LIMIT 1`, [trimmed]);
+    if (existing.rows.length > 0) {
+      return existing.rows[0];
+    }
+    const created = await query<Tag>(
+      `INSERT INTO tags (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id, name`,
+      [trimmed]
+    );
+    return created.rows[0];
   }
 
   /**

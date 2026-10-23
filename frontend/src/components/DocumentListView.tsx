@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import { FileText, Download, Lock, ExternalLink } from 'lucide-react';
+import { FileText, Download, Lock, ExternalLink, Eye } from 'lucide-react';
 import { Document } from '../types';
-import { getDownloadUrl } from '../lib/api';
+import { getDownloadUrl, getViewUrl } from '../lib/api';
 
 interface DocumentListViewProps {
   documents: Document[];
@@ -112,14 +112,25 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({ documents, o
 
                   <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                     {doc.latest_version_id && (
-                      <a
-                        href={getDownloadUrl(doc.latest_version_id)}
-                        className="inline-flex items-center p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Download latest version"
-                        download
-                      >
-                        <Download className="w-4 h-4" />
-                      </a>
+                      <div className="flex items-center justify-end space-x-1">
+                        <a
+                          href={getViewUrl(doc.latest_version_id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                          title="View document in browser"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </a>
+                        <a
+                          href={getDownloadUrl(doc.latest_version_id)}
+                          className="inline-flex items-center p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Download document"
+                          download
+                        >
+                          <Download className="w-4 h-4" />
+                        </a>
+                      </div>
                     )}
                   </td>
                 </tr>

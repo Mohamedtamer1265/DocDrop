@@ -30,7 +30,7 @@ export default function DocDropHome() {
   // Filters & Controls
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<'type' | 'title' | 'date' | 'size'>('type');
+  const [sortBy, setSortBy] = useState<'date' | 'title' | 'size'>('date');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Modals & Drawers
@@ -46,7 +46,27 @@ export default function DocDropHome() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Initial Data Fetch
+  const handleSelectTag = (tagName: string) => {
+    setSelectedTag(tagName);
+    window.history.pushState({ tag: tagName }, '', `?tag=${encodeURIComponent(tagName)}`);
+  };
+
+  const handleClearTag = () => {
+    setSelectedTag(null);
+    window.history.pushState({}, '', window.location.pathname);
+  };
+
+  // Listen to browser Back/Forward navigation buttons
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tagFromUrl = urlParams.get('tag');
+      setSelectedTag(tagFromUrl);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
   const loadData = async () => {
     setLoading(true);
     setError(null);
@@ -122,17 +142,15 @@ export default function DocDropHome() {
     switch (sortBy) {
       case 'title':
         return docs.sort((a, b) => a.title.localeCompare(b.title));
+      case 'size':
+        return docs.sort((a, b) => (b.file_size || 0) - (a.file_size || 0));
       case 'date':
+      default:
         return docs.sort(
           (a, b) =>
             new Date(b.updated_at || b.created_at).getTime() -
             new Date(a.updated_at || a.created_at).getTime()
         );
-      case 'size':
-        return docs.sort((a, b) => (b.file_size || 0) - (a.file_size || 0));
-      case 'type':
-      default:
-        return docs.sort((a, b) => (a.file_type || '').localeCompare(b.file_type || ''));
     }
   }, [documents, sortBy]);
 
@@ -163,6 +181,15 @@ export default function DocDropHome() {
       )
     );
 
+    // Refresh tags if newly created tags were introduced
+    if (createdDoc.tags && createdDoc.tags.length > 0) {
+      setTags((prev) => {
+        const existingIds = new Set(prev.map((t) => t.id));
+        const newTags = createdDoc.tags.filter((t) => !existingIds.has(t.id));
+        return newTags.length > 0 ? [...prev, ...newTags] : prev;
+      });
+    }
+
     // Add document to list
     setDocuments((prev) => [createdDoc, ...prev]);
   };
@@ -181,7 +208,7 @@ export default function DocDropHome() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         activeTag={selectedTag}
-        onTagClear={() => setSelectedTag(null)}
+        onTagClear={handleClearTag}
         sortBy={sortBy}
         onSortChange={setSortBy}
         viewMode={viewMode}
@@ -193,24 +220,38 @@ export default function DocDropHome() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 space-y-8">
-        {/* Virtual Folders / Tags Section (Only shown when not drilling into a tag or searching) */}
-        {!selectedTag && !searchQuery && tags.length > 0 && (
+      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 space-y-6">
+        {/* Virtual Folders / Tags Section - Always present as category row to prevent layout shifting */}
+        {tags.length > 0 && (
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Virtual Folders (Tags)
+                Categories & Virtual Folders
               </h2>
+              {selectedTag && (
+                <button
+                  onClick={handleClearTag}
+                  className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                >
+                  View All Files
+                </button>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
               {tags.map((tag) => (
                 <FolderCard
                   key={tag.id}
                   tag={tag}
                   count={tagCounts[tag.name] || 0}
                   isSelected={selectedTag === tag.name}
-                  onClick={() => setSelectedTag(tag.name)}
+                  onClick={() => {
+                    if (selectedTag === tag.name) {
+                      handleClearTag();
+                    } else {
+                      handleSelectTag(tag.name);
+                    }
+                  }}
                 />
               ))}
             </div>
@@ -231,10 +272,10 @@ export default function DocDropHome() {
 
             {selectedTag && (
               <button
-                onClick={() => setSelectedTag(null)}
-                className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                onClick={handleClearTag}
+                className="text-xs font-medium text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 px-2.5 py-1 rounded-lg transition-colors"
               >
-                Clear Folder Filter
+                Clear filter
               </button>
             )}
           </div>

@@ -4,6 +4,11 @@ import upload from '../middlewares/upload.middleware';
 
 const router = Router();
 
+// Reset all documents
+router.delete('/documents/reset', (req, res, next) =>
+  documentController.resetAllDocuments(req, res, next)
+);
+
 // Metadata lookup (departments, tags, users)
 router.get('/metadata', (req, res, next) => documentController.getMetadata(req, res, next));
 
@@ -15,7 +20,12 @@ router.post('/documents', upload.single('file'), (req, res, next) =>
   documentController.upload(req, res, next)
 );
 
-// View / download specific version
+// View file directly in browser tab (inline preview)
+router.get('/documents/view/:versionId', (req, res, next) =>
+  documentController.view(req, res, next)
+);
+
+// Download specific version (attachment)
 router.get('/documents/download/:versionId', (req, res, next) =>
   documentController.download(req, res, next)
 );

@@ -19,8 +19,8 @@ interface NavbarProps {
   onSearchChange: (q: string) => void;
   activeTag: string | null;
   onTagClear: () => void;
-  sortBy: 'type' | 'title' | 'date' | 'size';
-  onSortChange: (sort: 'type' | 'title' | 'date' | 'size') => void;
+  sortBy: 'date' | 'title' | 'size';
+  onSortChange: (sort: 'date' | 'title' | 'size') => void;
   viewMode: 'grid' | 'list';
   onViewModeChange: (m: 'grid' | 'list') => void;
   users: User[];
@@ -122,18 +122,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="absolute right-0 mt-1.5 w-40 bg-white rounded-xl shadow-lg border border-slate-100 py-1.5 z-40 text-sm"
                 onMouseLeave={() => setSortDropdownOpen(false)}
               >
-                {(['type', 'title', 'date', 'size'] as const).map((s) => (
+                {(
+                  [
+                    { key: 'date', label: 'Latest Modified' },
+                    { key: 'title', label: 'File Name (A–Z)' },
+                    { key: 'size', label: 'File Size' },
+                  ] as const
+                ).map((opt) => (
                   <button
-                    key={s}
+                    key={opt.key}
                     onClick={() => {
-                      onSortChange(s);
+                      onSortChange(opt.key);
                       setSortDropdownOpen(false);
                     }}
-                    className={`w-full text-left px-3.5 py-1.5 capitalize hover:bg-slate-50 ${
-                      sortBy === s ? 'text-blue-600 font-semibold bg-blue-50/50' : 'text-slate-700'
+                    className={`w-full text-left px-3.5 py-1.5 hover:bg-slate-50 ${
+                      sortBy === opt.key ? 'text-blue-600 font-semibold bg-blue-50/50' : 'text-slate-700'
                     }`}
                   >
-                    {s}
+                    {opt.label}
                   </button>
                 ))}
               </div>

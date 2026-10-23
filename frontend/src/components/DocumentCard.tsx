@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import { FileText, Download, Lock, CheckCircle, ExternalLink } from 'lucide-react';
+import { FileText, Download, Lock, CheckCircle, ExternalLink, Eye } from 'lucide-react';
 import { Document } from '../types';
-import { getDownloadUrl } from '../lib/api';
+import { getDownloadUrl, getViewUrl } from '../lib/api';
 
 interface DocumentCardProps {
   document: Document;
@@ -95,20 +95,35 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({ document, onClick })
         </p>
       </div>
 
-      {/* Tags & Metadata Footer */}
-      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-        <span>{formatSize(document.file_size)}</span>
+      {/* Action Buttons: View & Download directly from the card */}
+      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+        <span className="text-[11px] text-slate-400 font-mono truncate">
+          {formatSize(document.file_size)}
+        </span>
 
-        <div className="flex items-center space-x-1">
-          {document.tags && document.tags.length > 0 ? (
-            <span className="text-[10px] font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full truncate max-w-[90px]">
-              {document.tags[0].name}
-              {document.tags.length > 1 && ` +${document.tags.length - 1}`}
-            </span>
-          ) : (
-            <span className="text-slate-300">—</span>
-          )}
-        </div>
+        {document.latest_version_id && (
+          <div className="flex items-center space-x-1">
+            <a
+              href={getViewUrl(document.latest_version_id)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-medium"
+              title="View document in browser"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>View</span>
+            </a>
+            <a
+              href={getDownloadUrl(document.latest_version_id)}
+              download
+              className="p-1.5 text-blue-600 hover:text-white hover:bg-blue-600 rounded-lg transition-all flex items-center gap-1 text-[11px] font-semibold border border-blue-100 hover:border-blue-600 shadow-sm"
+              title="Download document"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download</span>
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );
